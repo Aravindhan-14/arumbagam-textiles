@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#7B1E3B">
+<title>VYRA SAREES</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="img/icon.svg">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div id="boot" class="boot">
+  <div class="boot-mark">VS</div>
+  <div class="boot-name">VYRA SAREES</div>
+  <div class="boot-sub">Boutique &amp; Textiles</div>
+  <div class="spinner"></div>
+  <div id="boot-msg" style="max-width:340px;margin-top:22px;padding:0 20px;text-align:center;
+       font-size:13px;line-height:1.5;opacity:.95;display:none"></div>
+</div>
+
+<!-- ============ LOGIN ============ -->
+<section id="login-screen" class="login hidden">
+  <div class="login-card">
+    <div class="brand">
+      <div class="brand-mark">VS</div>
+      <h1>VYRA SAREES</h1>
+      <p>Boutique &amp; Textiles</p>
+    </div>
+    <form id="login-form" autocomplete="on">
+      <label class="field">
+        <span>Email</span>
+        <input type="email" id="login-email" required autocomplete="username" inputmode="email" placeholder="you@shop.com">
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input type="password" id="login-password" required autocomplete="current-password" placeholder="••••••••">
+      </label>
+      <div id="login-error" class="form-error hidden"></div>
+      <button class="btn btn-primary btn-block" type="submit" id="login-btn">Login</button>
+      <button class="btn btn-ghost btn-block" type="button" id="forgot-btn">Forgot password?</button>
+    </form>
+    <p class="login-foot">Authorised staff only</p>
+  </div>
+</section>
+
+<!-- ============ APP SHELL ============ -->
+<div id="app-shell" class="shell hidden">
+
+  <header class="topbar">
+    <button class="icon-btn" id="menu-btn" aria-label="Menu">
+      <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <div class="topbar-title">
+      <strong id="page-title">Dashboard</strong>
+      <small id="page-sub">VYRA SAREES</small>
+    </div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="hw-btn" aria-label="Hardware">
+        <svg viewBox="0 0 24 24"><path d="M6 3v6M6 15v6M18 3v6M18 15v6M4 9h4M16 9h4"/><rect x="4" y="9" width="4" height="6" rx="1"/><rect x="16" y="9" width="4" height="6" rx="1"/></svg>
+        <span class="hw-dot" id="hw-dot"></span>
+      </button>
+      <button class="icon-btn" id="scan-top-btn" aria-label="Scan">
+        <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M3 12h18"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <aside id="drawer" class="drawer">
+    <div class="drawer-head">
+      <div class="brand-mark sm">VS</div>
+      <div>
+        <strong id="drawer-name">—</strong>
+        <small id="drawer-role">—</small>
+      </div>
+    </div>
+    <nav id="drawer-nav" class="drawer-nav"></nav>
+    <button class="btn btn-danger btn-block" id="logout-btn">Logout</button>
+    <div class="drawer-version">VYRA SAREES · v1.0</div>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <main id="view" class="view"></main>
+
+  <nav class="tabbar" id="tabbar"></nav>
+</div>
+
+<div id="toast-host" class="toast-host"></div>
+<div id="sheet-host"></div>
+<div id="busy" class="busy hidden"><div class="spinner"></div><span id="busy-text">Working…</span></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+<script type="module" src="js/app.js"></script>
+
+<script>
+/* Boot guard: if the app never starts, say why instead of spinning forever. */
+(function () {
+  var msg = document.getElementById("boot-msg");
+  function fail(text) {
+    var boot = document.getElementById("boot");
+    if (!boot || boot.classList.contains("hidden")) return;
+    boot.querySelector(".spinner").style.display = "none";
+    msg.style.display = "block";
+    msg.innerHTML = text;
+  }
+  window.addEventListener("error", function (e) {
+    var t = String((e && (e.message || e.error)) || "");
+    if (/firebase|api-key|invalid/i.test(t)) {
+      fail("<b>Firebase is not configured yet.</b><br>Open <code>js/firebase-config.js</code> and paste the config from your Firebase project, then reload.");
+    }
+  }, true);
+  setTimeout(function () {
+    fail(navigator.onLine
+      ? "<b>Still starting…</b><br>If this does not clear, check <code>js/firebase-config.js</code> and the browser console."
+      : "<b>You are offline.</b><br>Connect once so the app can sign you in, then it will keep working offline.");
+  }, 12000);
+
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () { /* offline caching unavailable */ });
+    });
+  }
+})();
+</script>
+</body>
+</html>

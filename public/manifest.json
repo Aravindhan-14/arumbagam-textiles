@@ -1,0 +1,21 @@
+{
+  "name": "VYRA SAREES - Billing & Inventory",
+  "short_name": "VYRA SAREES",
+  "description": "Boutique billing, inventory and sales management for VYRA SAREES",
+  "start_url": "./index.html#/dashboard",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#7B1E3B",
+  "theme_color": "#7B1E3B",
+  "lang": "en-IN",
+  "categories": ["business", "productivity", "shopping"],
+  "icons": [
+    { "src": "img/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "New Bill", "url": "./index.html#/billing" },
+    { "name": "Scan Product", "url": "./index.html#/scan" },
+    { "name": "Products", "url": "./index.html#/products" }
+  ]
+}

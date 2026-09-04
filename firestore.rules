@@ -1,0 +1,159 @@
+rules_version = '2';
+
+/* ============================================================
+   VYRA SAREES - Firestore security rules
+   ------------------------------------------------------------
+   Everyone who reaches the data must be a signed-in user whose
+   users/{uid} profile exists and is active. Admins have full
+   access; staff are limited by the permission flags an admin
+   sets on their profile.
+
+   Bootstrap: while settings/business does not exist yet, the
+   first signed-in account may create its own admin profile and
+   the business document. Saving settings closes that window.
+   ============================================================ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function profile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function hasProfile() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function isActive() {
+      return hasProfile() && profile().status == 'active';
+    }
+    function isAdmin() {
+      return isActive() && profile().role == 'admin';
+    }
+    function isStaff() {
+      return isActive();
+    }
+    /* Admins implicitly hold every permission. */
+    function can(p) {
+      return isAdmin() || (isActive() && profile().permissions[p] == true);
+    }
+    /* Open only until the business document is written. */
+    function bootstrap() {
+      return signedIn() && !exists(/databases/$(database)/documents/settings/business);
+    }
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    /* ---------------- users ---------------- */
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin() || bootstrap();
+
+      // First account on a fresh project becomes admin; later self-registrations
+      // land as inactive staff until an admin activates them.
+      allow create: if isAdmin()
+        || (signedIn() && request.auth.uid == uid && bootstrap()
+            && request.resource.data.role == 'admin')
+        || (signedIn() && request.auth.uid == uid && !bootstrap()
+            && request.resource.data.role == 'staff'
+            && request.resource.data.status == 'inactive');
+
+      allow update: if isAdmin()
+        || (signedIn() && request.auth.uid == uid
+            && changedKeys().hasOnly(['lastLoginAt', 'updatedAt', 'name']));
+
+      allow delete: if isAdmin();
+    }
+
+    /* ---------------- catalogue ---------------- */
+    match /products/{id} {
+      allow read: if isStaff();
+      allow create: if can('products.create');
+      // Billing and purchases move stock, so any active user may touch the
+      // stock counter; everything else needs the edit permission.
+      allow update: if can('products.edit')
+        || (isStaff() && changedKeys().hasOnly(['stock', 'updatedAt', 'purchasePrice']));
+      allow delete: if can('products.delete');
+    }
+
+    match /product_variants/{id} {
+      allow read: if isStaff();
+      allow write: if can('products.edit');
+    }
+
+    match /categories/{id} {
+      allow read: if isStaff();
+      allow write: if can('categories.manage');
+    }
+
+    /* ---------------- people ---------------- */
+    match /customers/{id} {
+      allow read, create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /suppliers/{id} {
+      allow read: if isStaff();
+      allow create, update: if can('suppliers.manage');
+      allow delete: if isAdmin();
+    }
+
+    /* ---------------- transactions ---------------- */
+    match /sales/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff()
+        && request.resource.data.staffId == request.auth.uid;
+      // Only cancellation and return bookkeeping may alter a saved bill.
+      allow update: if can('sales.cancel')
+        || (isStaff() && changedKeys().hasOnly(['hasReturn', 'returnedAmount', 'updatedAt']));
+      allow delete: if false;      // bills are cancelled, never deleted
+    }
+
+    match /purchases/{id} {
+      allow read: if isStaff();
+      allow create, update: if can('purchases.manage');
+      allow delete: if false;
+    }
+
+    match /returns/{id} {
+      allow read: if isStaff();
+      allow create: if can('returns.create');
+      allow update, delete: if false;
+    }
+
+    /* ---------------- audit trails ---------------- */
+    match /stock_history/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update, delete: if false;
+    }
+
+    match /activity_log/{id} {
+      allow read: if isAdmin();
+      allow create: if isStaff();
+      allow update, delete: if false;
+    }
+
+    /* ---------------- settings ---------------- */
+    match /settings/business {
+      allow read: if signedIn();
+      allow write: if can('settings.manage') || bootstrap();
+    }
+
+    // Document-number counters: every biller needs to reserve a block.
+    match /settings/counters {
+      allow read, write: if isStaff() || bootstrap();
+    }
+
+    match /settings/{doc} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    /* Everything else is closed. */
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,31 @@
+rules_version = '2';
+
+/* ============================================================
+   VYRA SAREES - Cloud Storage rules
+   Product photos and the shop logo. Signed-in staff may upload
+   images up to 5 MB; nothing else is writable.
+   ============================================================ */
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() { return request.auth != null; }
+    function isImage() {
+      return request.resource.contentType.matches('image/.*')
+        && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    match /products/{productId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && isImage();
+    }
+
+    match /business/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && isImage();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
