@@ -39,12 +39,13 @@ export function fmtTime(v) {
 }
 export function fmtDateTime(v) { const d = toDate(v); return d ? `${fmtDate(d)}  ${fmtTime(d)}` : "-"; }
 
-/** Firestore Timestamp | Date | number | ISO string -> Date */
+/** ISO string | Date | epoch number | Firestore Timestamp -> Date */
 export function toDate(v) {
   if (!v) return null;
   if (v instanceof Date) return v;
-  if (typeof v.toDate === "function") return v.toDate();
   if (typeof v === "number") return new Date(v);
+  if (typeof v.toDate === "function") return v.toDate();          // Firestore Timestamp
+  if (typeof v.seconds === "number") return new Date(v.seconds * 1000);
   const d = new Date(v); return isNaN(d.getTime()) ? null : d;
 }
 export function ago(v) {
@@ -208,3 +209,8 @@ export function toCsv(rows, headers) {
 export const validMobile = (s) => /^[0-9]{10}$/.test(String(s || "").replace(/\D/g, ""));
 export const validGstin = (s) => /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(upper(s));
 export const validEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(s || "").trim());
+
+/* ---------- uploaded files ---------- */
+/* Firebase Storage hands back a complete https download URL, so there is
+   nothing to prefix - this stays as the one place image paths pass through. */
+export const fileUrl = (u) => u || "";

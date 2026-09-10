@@ -8,6 +8,12 @@ rules_version = '2';
    access; staff are limited by the permission flags an admin
    sets on their profile.
 
+   What the shop paid for its stock is deliberately NOT stored on
+   the product. It lives in product_costs/{productId}, which only
+   an admin can read - so a staff phone never receives the cost
+   price at all, not even inside the network payload. Suppliers
+   and purchases sit behind the same wall for the same reason.
+
    Bootstrap: while settings/business does not exist yet, the
    first signed-in account may create its own admin profile and
    the business document. Saving settings closes that window.
@@ -50,14 +56,11 @@ service cloud.firestore {
       allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin() || bootstrap();
 
-      // First account on a fresh project becomes admin; later self-registrations
-      // land as inactive staff until an admin activates them.
+      // The first account on a fresh project becomes the admin; every other
+      // account is created by an admin from the Staff screen.
       allow create: if isAdmin()
         || (signedIn() && request.auth.uid == uid && bootstrap()
-            && request.resource.data.role == 'admin')
-        || (signedIn() && request.auth.uid == uid && !bootstrap()
-            && request.resource.data.role == 'staff'
-            && request.resource.data.status == 'inactive');
+            && request.resource.data.role == 'admin');
 
       allow update: if isAdmin()
         || (signedIn() && request.auth.uid == uid
@@ -70,16 +73,16 @@ service cloud.firestore {
     match /products/{id} {
       allow read: if isStaff();
       allow create: if can('products.create');
-      // Billing and purchases move stock, so any active user may touch the
+      // Billing and returns move stock, so any active user may touch the
       // stock counter; everything else needs the edit permission.
       allow update: if can('products.edit')
-        || (isStaff() && changedKeys().hasOnly(['stock', 'updatedAt', 'purchasePrice']));
+        || (isStaff() && changedKeys().hasOnly(['stock', 'updatedAt']));
       allow delete: if can('products.delete');
     }
 
-    match /product_variants/{id} {
-      allow read: if isStaff();
-      allow write: if can('products.edit');
+    /* What we paid. Owner only - a staff device never receives these. */
+    match /product_costs/{id} {
+      allow read, write: if isAdmin();
     }
 
     match /categories/{id} {
@@ -93,10 +96,9 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    /* Suppliers reveal who we buy from and at what price. Owner only. */
     match /suppliers/{id} {
-      allow read: if isStaff();
-      allow create, update: if can('suppliers.manage');
-      allow delete: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
     /* ---------------- transactions ---------------- */
@@ -110,9 +112,9 @@ service cloud.firestore {
       allow delete: if false;      // bills are cancelled, never deleted
     }
 
+    /* Purchases carry the buying rate, so they follow the cost wall. */
     match /purchases/{id} {
-      allow read: if isStaff();
-      allow create, update: if can('purchases.manage');
+      allow read, create, update: if isAdmin();
       allow delete: if false;
     }
 

@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#7B1E3B">
+<meta name="color-scheme" content="light">
 <title>VYRA SAREES</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="img/icon.svg">
@@ -107,13 +108,13 @@
   }
   window.addEventListener("error", function (e) {
     var t = String((e && (e.message || e.error)) || "");
-    if (/firebase|api-key|invalid/i.test(t)) {
-      fail("<b>Firebase is not configured yet.</b><br>Open <code>js/firebase-config.js</code> and paste the config from your Firebase project, then reload.");
+    if (/failed to fetch|networkerror|load failed|dynamically imported/i.test(t)) {
+      fail("<b>Cannot load Firebase.</b><br>The app needs the internet the first time it opens. Check the connection and reload.");
     }
   }, true);
   setTimeout(function () {
     fail(navigator.onLine
-      ? "<b>Still starting…</b><br>If this does not clear, check <code>js/firebase-config.js</code> and the browser console."
+      ? "<b>Still starting…</b><br>If this does not clear, open the browser console and check the Firebase settings in <code>js/firebase-config.js</code>."
       : "<b>You are offline.</b><br>Connect once so the app can sign you in, then it will keep working offline.");
   }, 12000);
 

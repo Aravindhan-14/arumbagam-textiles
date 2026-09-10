@@ -7,7 +7,7 @@ import {
   icon, openSheet, emptyState, toast, ok, err, warn, busy, confirmDialog, formData
 } from "../ui.js";
 import {
-  esc, money, num, toNum, toInt, round2, computeBill, debounce, fmtDate, fmtTime
+  esc, fileUrl, money, num, toNum, toInt, round2, computeBill, debounce, fmtDate, fmtTime
 } from "../utils.js";
 import { pickProduct, pickCustomer, openCustomerEditor } from "./_shared.js";
 import { setScanHandler } from "../app.js";
@@ -22,12 +22,18 @@ let cart = [];
 let customer = null;
 let billDiscount = 0;
 let note = "";
+/* GST for THIS bill. Starts from the shop setting and can be switched off
+   for a single bill (an estimate, a no-GST customer) without changing it
+   for everybody. null means "not decided yet - follow the setting". */
+let gstOn = null;
+const gstDefault = () => state.settings?.gstEnabled !== false;
+const gstActive = () => (gstOn === null ? gstDefault() : gstOn);
 
 /* ---------- persistence so a page change never loses the cart ---------- */
 function saveCart() {
   try {
     sessionStorage.setItem(CART_KEY, JSON.stringify({
-      cart: cart.map(({ product, ...l }) => l), customerId: customer?.id || "", billDiscount, note
+      cart: cart.map(({ product, ...l }) => l), customerId: customer?.id || "", billDiscount, note, gstOn
     }));
   } catch {}
 }
@@ -40,9 +46,10 @@ function loadCart() {
     customer = d.customerId ? customerById(d.customerId) : null;
     billDiscount = toNum(d.billDiscount);
     note = d.note || "";
+    gstOn = d.gstOn === undefined ? null : d.gstOn;
   } catch {}
 }
-function clearCart() { cart = []; customer = null; billDiscount = 0; note = ""; sessionStorage.removeItem(CART_KEY); }
+function clearCart() { cart = []; customer = null; billDiscount = 0; note = ""; gstOn = null; sessionStorage.removeItem(CART_KEY); }
 
 /* ============================================================
    Mount
@@ -69,6 +76,7 @@ export async function mount(view, { go }) {
     <div class="btn-row mb">
       <button class="btn btn-soft btn-sm" id="bl-disc">${icon("tag")} Bill discount</button>
       <button class="btn btn-soft btn-sm" id="bl-note">${icon("edit")} Note</button>
+      <button class="btn btn-soft btn-sm" id="bl-gst"></button>
       <button class="btn btn-soft btn-sm" id="bl-clear">${icon("trash")} Clear</button>
     </div>
     <div class="small muted tc mb">${peekBlockSize("invoice")} invoice numbers reserved for offline billing</div>
@@ -85,12 +93,13 @@ export async function mount(view, { go }) {
     totals: view.querySelector("#bl-totals"),
     cust: view.querySelector("#bl-customer"),
     grand: view.querySelector("#bl-grand"),
+    gst: view.querySelector("#bl-gst"),
     pay: view.querySelector("#bl-pay")
   };
 
   /* ---------- render ---------- */
   const bill = () => computeBill(cart, {
-    gstEnabled: state.settings?.gstEnabled !== false,
+    gstEnabled: gstActive(),
     gstMode: state.settings?.gstMode || "exclusive",
     billDiscount,
     roundOff: state.settings?.roundOff !== false,
@@ -119,7 +128,7 @@ export async function mount(view, { go }) {
     els.totals.innerHTML = cart.length ? `
       <div class="trow"><span>Subtotal (${cart.length} items)</span><b>${money(b.subtotal)}</b></div>
       ${b.discount > 0 ? `<div class="trow"><span>Discount</span><b>- ${money(b.discount)}</b></div>` : ""}
-      ${state.settings?.gstEnabled !== false && b.tax > 0 ? `
+      ${gstActive() && b.tax > 0 ? `
         <div class="trow"><span>Taxable value</span><b>${money(b.taxableAmount)}</b></div>
         ${b.igst > 0
           ? `<div class="trow"><span>IGST</span><b>${money(b.igst)}</b></div>`
@@ -127,6 +136,9 @@ export async function mount(view, { go }) {
              <div class="trow"><span>SGST</span><b>${money(b.sgst)}</b></div>`}` : ""}
       ${Math.abs(b.roundOff) >= 0.01 ? `<div class="trow"><span>Round off</span><b>${money(b.roundOff)}</b></div>` : ""}
       <div class="trow grand"><span>Grand Total</span><b>${money(b.grandTotal)}</b></div>` : "";
+
+    els.gst.innerHTML = `${icon(gstActive() ? "check" : "x")} GST ${gstActive() ? "on" : "off"}`;
+    els.gst.classList.toggle("btn-primary", gstActive());
 
     els.grand.textContent = money(b.grandTotal);
     els.pay.disabled = !cart.length;
@@ -193,7 +205,7 @@ export async function mount(view, { go }) {
     const list = searchProducts(v, { status: "active" }).slice(0, 8);
     els.sug.innerHTML = list.length ? list.map((p, i) => `
       <li class="row" data-sug="${p.id}">
-        <div class="thumb">${p.imageUrl ? `<img src="${esc(p.imageUrl)}">` : esc((p.productName || "?").slice(0, 2).toUpperCase())}</div>
+        <div class="thumb">${p.imageUrl ? `<img src="${esc(fileUrl(p.imageUrl))}">` : esc((p.productName || "?").slice(0, 2).toUpperCase())}</div>
         <div class="mid"><b>${esc(p.productName)}</b><small>${esc(p.sku)} · ${toNum(p.stock)} in stock</small></div>
         <div class="end"><b>${money(p.sellingPrice)}</b></div></li>`).join("")
       : `<li class="row" style="cursor:default"><div class="mid muted">No match for "${esc(v)}"</div></li>`;
@@ -223,6 +235,11 @@ export async function mount(view, { go }) {
       footer: `<button class="btn btn-soft" data-close>Cancel</button><button class="btn btn-primary" id="bn-ok">Save</button>`,
       onMount(a) { a.root.querySelector("#bn-ok").onclick = () => { note = a.root.querySelector("#bn").value; a.close(); paint(); }; }
     });
+  };
+  view.querySelector("#bl-gst").onclick = () => {
+    gstOn = !gstActive();
+    paint();
+    toast(gstOn ? "GST will be charged on this bill" : "This bill is billed without GST");
   };
   view.querySelector("#bl-clear").onclick = async () => {
     if (!cart.length) return;
@@ -466,7 +483,6 @@ async function saveBill(b, pay, sheet, onDone, go) {
       qty: l.qty, price: l.price, discount: toNum(l.discount),
       lineDiscount: l.lineDiscount, amount: l.amount, netAmount: l.netAmount,
       gstRate: l.gstRate, taxableAmount: l.taxableAmount, taxAmount: l.taxAmount,
-      purchasePrice: toNum(l.product?.purchasePrice),
       stockAfter: round2(toNum(l.product?.stock) - l.qty)
     }));
 
@@ -482,16 +498,17 @@ async function saveBill(b, pay, sheet, onDone, go) {
       paymentMethod: pay.method, paymentStatus: pay.status,
       amountReceived: round2(pay.received),
       balance: round2(b.grandTotal - pay.received),
-      gstEnabled: settings.gstEnabled !== false,
+      gstEnabled: gstActive(),
       businessGstin: settings.gstin || "",
       note, itemCount: items.length,
-      totalQty: items.reduce((a, i) => a + i.qty, 0),
-      profit: round2(items.reduce((a, i) => a + (i.netAmount - i.taxAmount - i.purchasePrice * i.qty), 0))
+      totalQty: items.reduce((a, i) => a + i.qty, 0)
     };
 
     const saleId = await createSale(sale, cart);
     sheet.close();
-    ok(`${invoiceNumber} saved`);
+    // A null id means the network was down and the bill is waiting in the
+    // outbox; it goes to the server by itself when the connection returns.
+    ok(saleId ? `${invoiceNumber} saved` : `${invoiceNumber} saved offline · will sync`);
     clearCart(); onDone();
 
     afterSaleSheet({ ...sale, id: saleId, createdAt: new Date() }, settings, go);

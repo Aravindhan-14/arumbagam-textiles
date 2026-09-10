@@ -1,11 +1,11 @@
 /* ============================================================
    VYRA SAREES - Sales history
    ============================================================ */
-import { state, can } from "../store.js";
-import { C, queryRange, cancelSale, ref, getDoc } from "../db.js";
+import { state, can, canSeeCost, costOf } from "../store.js";
+import { C, queryRange, cancelSale, getDocById } from "../db.js";
 import { icon, openSheet, emptyState, statCard, ok, err, warn, busy, confirmDialog, promptDialog, toast } from "../ui.js";
 import {
-  esc, money, money0, num, toNum, fmtDate, fmtTime, fmtDateTime, startOfDay, endOfDay, addDays,
+  esc, money, money0, num, toNum, round2, fmtDate, fmtTime, fmtDateTime, startOfDay, endOfDay, addDays,
   startOfWeek, startOfMonth, dateInput, sum, matches, debounce, download, toCsv
 } from "../utils.js";
 import { printSale, receiptHtml } from "../hw/documents.js";
@@ -72,7 +72,7 @@ export async function mount(view, { params, go }) {
     let list = sales;
     if (payFilter) list = list.filter((s) => s.paymentMethod === payFilter);
     if (q) list = list.filter((s) => matches([s.invoiceNumber, s.customerName, s.customerMobile, s.staffName].join(" "), q));
-    if (!can("reports.full")) list = list.filter((s) => s.staffId === state.user?.uid);
+    if (!can("sales.viewAll")) list = list.filter((s) => s.staffId === state.user?.uid);
 
     const active = list.filter((s) => s.status !== "cancelled");
     statsEl.innerHTML = `
@@ -134,7 +134,7 @@ export async function mount(view, { params, go }) {
 
   await load();
   if (params.id) {
-    const s = sales.find((x) => x.id === params.id) || await getDoc(ref(C.sales, params.id)).then((d) => d.exists() ? { id: d.id, ...d.data() } : null).catch(() => null);
+    const s = sales.find((x) => x.id === params.id) || await getDocById(C.sales, params.id).catch(() => null);
     if (s) openBill(s, load, go);
   }
 }
@@ -146,6 +146,12 @@ export function openBill(sale, onChange, go) {
   if (!sale) return err("Bill not found");
   const settings = state.settings || {};
   const cancelled = sale.status === "cancelled";
+  // Bills do not carry what the shop paid, so profit is worked out against
+  // the cost on file - and only for the owner, who is the only one who has it.
+  const profit = canSeeCost()
+    ? round2((sale.items || []).reduce(
+        (a, i) => a + (toNum(i.netAmount) - toNum(i.taxAmount) - costOf(i.productId) * toNum(i.qty)), 0))
+    : 0;
 
   openSheet({
     title: sale.invoiceNumber || "Bill",
@@ -189,7 +195,7 @@ export function openBill(sale, onChange, go) {
         <div class="trow"><span>Received</span><b>${money(sale.amountReceived)}</b></div>
       </div>
 
-      ${can("reports.full") && toNum(sale.profit) ? `<div class="small muted tc mt">Estimated gross profit ${money(sale.profit)}</div>` : ""}
+      ${profit ? `<div class="small muted tc mt">Estimated gross profit ${money(profit)}</div>` : ""}
       ${sale.note ? `<p class="small muted mt">Note: ${esc(sale.note)}</p>` : ""}`,
     footer: `<button class="btn btn-soft" data-close>Close</button>
              <button class="btn btn-primary" id="bs-print">${icon("print")} Reprint</button>`,

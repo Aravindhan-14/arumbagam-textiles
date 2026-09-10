@@ -2,16 +2,27 @@
    VYRA SAREES - Staff & access control
    ============================================================ */
 import { state, can, isAdmin } from "../store.js";
-import { C, col, getDocs, query, orderBy, ref, setDoc, updateDoc, serverTimestamp, logActivity, sendPasswordResetEmail, auth } from "../db.js";
-import { firebaseConfig, SDK } from "../firebase-config.js";
+import { listUsers, createUser, updateUser, sendStaffPasswordReset } from "../db.js";
 import { icon, openSheet, emptyState, ok, err, warn, busy, confirmDialog, formData, toast } from "../ui.js";
 import { esc, fmtDateTime, validEmail, ago } from "../utils.js";
 
 export const title = "Staff";
 
-/* Permissions a staff member can be granted. Admin always has everything. */
+/*
+ * Permissions a staff member can be granted. Admin always has everything.
+ * The third value is the default for a new account - it also matches
+ * STAFF_DEFAULT in store.js, so an untouched profile behaves the same way.
+ *
+ * Purchase price, margin, profit, suppliers and purchases are deliberately
+ * absent: they are owner-only and cannot be granted. The cost of an item is
+ * not even stored on the product - see firestore.rules -> product_costs.
+ */
 const PERMS = [
   ["sales.create", "Create bills", true],
+  ["products.view", "See the product list", true],
+  ["customers.view", "See and add customers", true],
+  ["labels.print", "Print QR / barcode labels", true],
+
   ["sales.viewAll", "See all staff's sales", false],
   ["sales.cancel", "Cancel bills", false],
   ["sales.editPrice", "Change item price while billing", false],
@@ -19,11 +30,10 @@ const PERMS = [
   ["products.edit", "Edit products", false],
   ["products.delete", "Delete products", false],
   ["categories.manage", "Manage categories", false],
+  ["inventory.view", "Open Stock & Adjustments", false],
   ["inventory.adjust", "Adjust stock", false],
-  ["purchases.manage", "Record purchases", false],
-  ["suppliers.manage", "Manage suppliers", false],
   ["returns.create", "Process returns & exchanges", false],
-  ["reports.full", "See full business reports", false],
+  ["reports.view", "Open Reports", false],
   ["settings.manage", "Change business settings", false],
   ["staff.manage", "Manage staff", false]
 ];
@@ -35,13 +45,9 @@ export async function mount(view, { go }) {
     view.innerHTML = `<div class="empty">${icon("clock")}<b>Loading…</b></div>`;
     let users = [];
     try {
-      const snap = await getDocs(query(col(C.users), orderBy("name")));
-      users = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+      users = await listUsers();
     } catch (e) {
-      try {
-        const snap = await getDocs(col(C.users));
-        users = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
-      } catch (e2) { view.innerHTML = emptyState("Could not load staff", e2.message, "alert"); return; }
+      view.innerHTML = emptyState("Could not load staff", e.message, "alert"); return;
     }
 
     view.innerHTML = `
@@ -58,7 +64,8 @@ export async function mount(view, { go }) {
             </div>
           </li>`).join("")}
       </ul>
-      <p class="form-note mt">Staff accounts are created with an email and password. Ask each person to change their password after the first login.</p>`;
+      <p class="form-note mt">Staff sign in with the email address and password set here, and can change the password themselves from Settings.
+        Staff never see purchase price, margin, profit, suppliers or stock value - those numbers are not sent to their phone at all.</p>`;
 
     view.querySelector("#st-add").onclick = () => addStaff(load);
     view.querySelectorAll("[data-uid]").forEach((li) => {
@@ -78,6 +85,7 @@ function addStaff(onDone) {
     body: `
       <label class="field req"><span>Full name</span><input name="name" required></label>
       <label class="field req"><span>Email (used to log in)</span><input name="email" type="email" required></label>
+      <p class="form-note">Use an address the person can actually open - a forgotten password is reset by email.</p>
       <label class="field req"><span>Temporary password</span>
         <input name="password" type="text" value="${suggestPassword()}" minlength="6" required></label>
       <p class="form-note">Share this password with the staff member. They can change it later from the login screen.</p>
@@ -97,40 +105,24 @@ function addStaff(onDone) {
         if (!validEmail(d.email)) return fail("Enter a valid email address.");
         if ((d.password || "").length < 6) return fail("Password must be at least 6 characters.");
 
-        let secondary = null;
         try {
           busy(true, "Creating account…");
-          /* A second Firebase app keeps the owner signed in while the new
-             account is created. */
-          const { initializeApp, deleteApp } = await import(`${SDK}/firebase-app.js`);
-          const { getAuth, createUserWithEmailAndPassword, signOut } = await import(`${SDK}/firebase-auth.js`);
-          secondary = initializeApp(firebaseConfig, "vyra-staff-" + Date.now());
-          const sAuth = getAuth(secondary);
-          const cred = await createUserWithEmailAndPassword(sAuth, d.email.trim(), d.password);
-
           const permissions = {};
           PERMS.forEach(([k]) => { permissions[k] = !!d["perm:" + k]; });
 
-          await setDoc(ref(C.users, cred.user.uid), {
-            name: d.name.trim(), email: d.email.trim().toLowerCase(),
-            role: d.role, status: "active", permissions,
-            createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-            createdBy: state.user?.uid || ""
+          await createUser({
+            name: d.name.trim(),
+            email: d.email.trim().toLowerCase(),
+            password: d.password,
+            role: d.role,
+            permissions
           });
-          logActivity(null, "STAFF_ADDED", `${d.name} (${d.email})`, "user", cred.user.uid);
-
-          await signOut(sAuth);
-          await deleteApp(secondary); secondary = null;
 
           api.close();
           ok(`${d.name} can now log in`);
           onDone();
         } catch (e) {
-          const c = e?.code || "";
-          fail(c.includes("email-already-in-use") ? "That email already has an account."
-            : c.includes("weak-password") ? "Choose a stronger password."
-              : e.message || "Could not create the account.");
-          if (secondary) { try { const { deleteApp } = await import(`${SDK}/firebase-app.js`); await deleteApp(secondary); } catch {} }
+          fail(e.message || "Could not create the account.");
         } finally { busy(false); }
       };
     }
@@ -164,12 +156,14 @@ function staffSheet(u, onDone) {
         <span>Account active</span></label>
 
       <div class="sec-title">Permissions</div>
-      <p class="form-note">Administrators always have full access; these apply to staff accounts.</p>
-      ${PERMS.map(([k, label]) => `<label class="check">
-        <input type="checkbox" name="perm:${k}" ${perms[k] ? "checked" : ""}><span>${esc(label)}</span></label>`).join("")}
+      <p class="form-note">Administrators always have full access; these apply to staff accounts.
+        Purchase price, margin, profit, supplier and stock value are never shown to staff.</p>
+      ${PERMS.map(([k, label, def]) => `<label class="check">
+        <input type="checkbox" name="perm:${k}" ${(perms[k] === undefined ? def : perms[k]) ? "checked" : ""}><span>${esc(label)}</span></label>`).join("")}
 
       <div class="divider"></div>
-      <button class="btn btn-soft btn-block" id="sf-reset">Send password reset email</button>
+      <button class="btn btn-soft btn-block" id="sf-reset" type="button">Send a password reset email</button>
+      <p class="form-note">The link goes to ${esc(u.email || "their address")} and lets them pick a new password themselves.</p>
       <div id="sf-err" class="form-error hidden"></div>`,
     footer: `<button class="btn btn-soft" data-close>Cancel</button>
              <button class="btn btn-primary" id="sf-save">Save</button>`,
@@ -177,9 +171,12 @@ function staffSheet(u, onDone) {
       const fail = (m) => { const b = api.root.querySelector("#sf-err"); b.textContent = m; b.classList.remove("hidden"); };
 
       api.root.querySelector("#sf-reset").onclick = async () => {
-        if (!u.email) return fail("No email on record.");
-        try { await sendPasswordResetEmail(auth, u.email); ok("Reset link sent to " + u.email); }
-        catch (e) { fail(e.message); }
+        if (!u.email) return fail("This account has no email address on file.");
+        try {
+          busy(true, "Sending…");
+          await sendStaffPasswordReset(u.email);
+          ok(`Reset link sent to ${u.email}`);
+        } catch (e) { fail(e.message); } finally { busy(false); }
       };
 
       api.root.querySelector("#sf-save").onclick = async () => {
@@ -188,11 +185,12 @@ function staffSheet(u, onDone) {
         PERMS.forEach(([k]) => { permissions[k] = !!d["perm:" + k]; });
         try {
           busy(true, "Saving…");
-          const patch = { name: (d.name || "").trim(), permissions, updatedAt: serverTimestamp() };
+          const patch = { name: (d.name || "").trim(), permissions };
           if (!isSelf) { patch.role = d.role; patch.status = d.active ? "active" : "inactive"; }
-          await updateDoc(ref(C.users, u.uid), patch);
-          logActivity(null, "STAFF_UPDATED", `${patch.name || u.email}`, "user", u.uid);
-          api.close(); ok("Saved"); onDone();
+          await updateUser(u.uid, patch);
+          api.close();
+          ok("Saved");
+          onDone();
         } catch (e) { fail(e.message); } finally { busy(false); }
       };
     }

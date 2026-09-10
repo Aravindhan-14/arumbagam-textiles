@@ -1,7 +1,7 @@
 /* ============================================================
    VYRA SAREES - application shell, router and hardware panel
    ============================================================ */
-import { watchAuth, login, logout, resetPassword, authMessage } from "./auth.js";
+import { watchAuth, login, logout, authMessage, startSession, resetPassword } from "./auth.js";
 import { state, on, can, isAdmin } from "./store.js";
 import { icon, toast, ok, err, warn, openSheet, confirmDialog, busy, closeTopSheet, sheetsOpen } from "./ui.js";
 import { onScan, scannerStatus, emitScan } from "./hw/scanner.js";
@@ -10,31 +10,31 @@ import {
   setPrinterMode, printerMode, setPaperWidth, supportsWebBluetooth, Escpos
 } from "./hw/printer.js";
 import { esc, toNum } from "./utils.js";
-import { peekBlockSize } from "./db.js";
+import { peekBlockSize, pendingBills, flushOutbox } from "./db.js";
 
 /* ============================================================
    Navigation model
    ============================================================ */
 const NAV = [
   { id: "dashboard", label: "Dashboard", ic: "dashboard", tab: true },
-  { id: "products",  label: "Products",  ic: "box",   tab: true },
+  { id: "products",  label: "Products",  ic: "box",   tab: true, perm: "products.view" },
   { id: "scan",      label: "Scan",      ic: "scan",  tab: "fab" },
-  { id: "billing",   label: "Billing",   ic: "bill",  tab: true },
+  { id: "billing",   label: "Billing",   ic: "bill",  tab: true, perm: "sales.create" },
   { id: "sales",     label: "Sales",     ic: "rupee", tab: true },
 
   { sep: "Inventory" },
-  { id: "inventory", label: "Stock & Adjustments", ic: "stack" },
+  { id: "inventory", label: "Stock & Adjustments", ic: "stack", perm: "inventory.view" },
   { id: "categories", label: "Categories", ic: "tag", perm: "categories.manage" },
-  { id: "labels",    label: "QR / Barcode Labels", ic: "qr" },
+  { id: "labels",    label: "QR / Barcode Labels", ic: "qr", perm: "labels.print" },
   { id: "purchases", label: "Purchases", ic: "cart", perm: "purchases.manage" },
   { id: "suppliers", label: "Suppliers", ic: "truck", perm: "suppliers.manage" },
 
   { sep: "People" },
-  { id: "customers", label: "Customers", ic: "users" },
-  { id: "returns",   label: "Returns & Exchange", ic: "ret" },
+  { id: "customers", label: "Customers", ic: "users", perm: "customers.view" },
+  { id: "returns",   label: "Returns & Exchange", ic: "ret", perm: "returns.create" },
 
   { sep: "Business" },
-  { id: "reports",   label: "Reports",  ic: "chart" },
+  { id: "reports",   label: "Reports",  ic: "chart", perm: "reports.view" },
   { id: "staff",     label: "Staff",    ic: "user", perm: "staff.manage" },
   { id: "activity",  label: "Activity Log", ic: "clock", perm: "staff.manage" },
   { id: "settings",  label: "Settings", ic: "gear" }
@@ -194,7 +194,9 @@ function hardwareSheet() {
         <div class="trow"><span>Network</span><b>${state.online ? "Online" : "Offline"}</b></div>
         <div class="trow"><span>Invoice numbers reserved</span><b>${peekBlockSize("invoice")}</b></div>
         <div class="trow"><span>Products cached</span><b>${state.products.length}</b></div>
-        <p class="form-note mt">Reserved invoice numbers let billing continue without a network. They top up automatically whenever you are online.</p>
+        <div class="trow"><span>Writes waiting to sync</span><b>${pendingBills()}</b></div>
+        <p class="form-note mt">Reserved invoice numbers let billing continue without a network. Bills made offline are held on this device and sent as soon as the connection returns.</p>
+        ${pendingBills() ? `<button class="btn btn-soft btn-block mt" id="hw-flush">Sync now</button>` : ""}
       </div>`);
 
     api.root.querySelector("#hw-mode").value = printerMode();
@@ -218,6 +220,15 @@ function hardwareSheet() {
     };
     const disc = api.root.querySelector("#hw-disc");
     if (disc) disc.onclick = () => { disconnectPrinter(); toast("Printer disconnected"); render(api); };
+    const flush = api.root.querySelector("#hw-flush");
+    if (flush) flush.onclick = async () => {
+      try {
+        busy(true, "Sending…");
+        const sent = await flushOutbox();
+        ok(sent ? `${sent} change${sent === 1 ? "" : "s"} synced` : "Nothing could be sent yet");
+        render(api);
+      } catch (e) { err(e.message); } finally { busy(false); }
+    };
     api.root.querySelector("#hw-testscan").onclick = async () => {
       const code = prompt("Enter a code to simulate a scan:");
       if (code) { api.close(); emitScan(code); }
@@ -247,7 +258,11 @@ function wireLogin() {
     errBox.classList.add("hidden");
     btn.disabled = true; btn.textContent = "Signing in…";
     try {
-      await login(document.getElementById("login-email").value, document.getElementById("login-password").value);
+      const user = await login(
+        document.getElementById("login-email").value,
+        document.getElementById("login-password").value);
+      document.getElementById("login-password").value = "";
+      await startSession(user, (u) => showApp(u));
     } catch (ex) {
       errBox.textContent = authMessage(ex); errBox.classList.remove("hidden");
     } finally { btn.disabled = false; btn.textContent = "Login"; }
@@ -255,9 +270,14 @@ function wireLogin() {
 
   document.getElementById("forgot-btn").onclick = async () => {
     const email = document.getElementById("login-email").value.trim();
-    if (!email) { errBox.textContent = "Enter your email address first, then tap Forgot password."; errBox.classList.remove("hidden"); return; }
-    try { await resetPassword(email); ok("Password reset link sent to " + email); }
-    catch (ex) { errBox.textContent = authMessage(ex); errBox.classList.remove("hidden"); }
+    errBox.classList.remove("hidden");
+    if (!email) { errBox.textContent = "Type your email address first, then tap Forgot password."; return; }
+    try {
+      await resetPassword(email);
+      errBox.textContent = `A link to set a new password has been sent to ${email}.`;
+    } catch (ex) {
+      errBox.textContent = authMessage(ex);
+    }
   };
 }
 
@@ -265,11 +285,14 @@ function showLogin(reason) {
   document.getElementById("boot").classList.add("hidden");
   document.getElementById("app-shell").classList.add("hidden");
   document.getElementById("login-screen").classList.remove("hidden");
-  if (reason === "inactive") {
-    const box = document.getElementById("login-error");
-    box.textContent = "This account is not active yet. Ask the shop owner to activate it.";
-    box.classList.remove("hidden");
-  }
+  const box = document.getElementById("login-error");
+  const message =
+    reason === "inactive" ? "This account is not active yet. Ask the shop owner to activate it."
+      : reason === "expired" ? "Your session has ended. Please log in again."
+        : typeof reason === "string" && reason.startsWith("error:") ? reason.slice(6)
+          : "";
+  if (message) { box.textContent = message; box.classList.remove("hidden"); }
+  else box.classList.add("hidden");
 }
 
 function showApp(user) {

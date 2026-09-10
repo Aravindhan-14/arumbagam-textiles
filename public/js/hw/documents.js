@@ -16,6 +16,9 @@ const rs = (n) => "Rs." + num(n);
    ============================================================ */
 export function buildReceipt(sale, settings, { copy = "" } = {}) {
   const p = new Escpos(toNum(settings.printerWidth, 58));
+  // A bill can be raised without GST even when the shop normally charges it,
+  // so the bill's own flag decides what gets printed.
+  const gst = sale.gstEnabled !== false && settings.gstEnabled !== false;
 
   p.align("center").bold(true).size(2, 2).line(settings.businessName || "VYRA SAREES").size(1, 1);
   if (settings.businessType) p.line(settings.businessType);
@@ -23,7 +26,7 @@ export function buildReceipt(sale, settings, { copy = "" } = {}) {
   if (settings.address) wrap(settings.address, p.cols).forEach((l) => p.line(l));
   const contact = [settings.mobile ? "Ph: " + settings.mobile : "", settings.email || ""].filter(Boolean).join("  ");
   if (contact) p.line(contact);
-  if (settings.gstEnabled && settings.gstin) p.line("GSTIN: " + settings.gstin);
+  if (gst && settings.gstin) p.line("GSTIN: " + settings.gstin);
   p.align("left").rule();
 
   if (copy) p.align("center").line(copy).align("left").rule();
@@ -53,7 +56,7 @@ export function buildReceipt(sale, settings, { copy = "" } = {}) {
   p.rule();
   p.lr("Subtotal", num(sale.subtotal));
   if (toNum(sale.discount) > 0) p.lr("Discount", "-" + num(sale.discount));
-  if (settings.gstEnabled && toNum(sale.tax) > 0) {
+  if (gst && toNum(sale.tax) > 0) {
     p.lr("Taxable", num(sale.taxableAmount));
     if (toNum(sale.igst) > 0) p.lr("IGST", num(sale.igst));
     else { p.lr("CGST", num(sale.cgst)); p.lr("SGST", num(sale.sgst)); }
@@ -76,7 +79,7 @@ export function buildReceipt(sale, settings, { copy = "" } = {}) {
   p.lr("Items", `${(sale.items || []).length} / ${totalQty} pcs`);
   p.rule();
 
-  if (settings.gstEnabled && toNum(sale.tax) > 0 && settings.showGstSummary !== false) {
+  if (gst && toNum(sale.tax) > 0 && settings.showGstSummary !== false) {
     p.align("center").line("GST SUMMARY").align("left");
     const byRate = new Map();
     (sale.items || []).forEach((it) => {
@@ -99,8 +102,18 @@ export function buildReceipt(sale, settings, { copy = "" } = {}) {
   return p;
 }
 
+/**
+ * True when a job should go through the browser's print dialog instead of
+ * raw ESC/POS bytes: the shop picked "Browser print", or there is no thermal
+ * transport at all (a desk PC with a USB printer, for example).
+ */
+export function usesBrowserPrint() {
+  if (printerMode() === "browser") return true;
+  return !isConnected() && printerMode() === "auto" && !navigator.bluetooth && !isAndroid();
+}
+
 export async function printSale(sale, settings, opts = {}) {
-  if (printerMode() === "browser" || (!isConnected() && printerMode() === "auto" && !navigator.bluetooth && !isAndroid())) {
+  if (usesBrowserPrint()) {
     printHtmlFallback(receiptHtml(sale, settings, opts), sale.invoiceNumber || "Receipt");
     return "browser";
   }
@@ -114,6 +127,7 @@ const isAndroid = () => /android/i.test(navigator.userAgent);
    Receipt - HTML twin (preview + browser printing)
    ============================================================ */
 export function receiptHtml(sale, settings, { copy = "" } = {}) {
+  const gst = sale.gstEnabled !== false && settings.gstEnabled !== false;
   const rows = (sale.items || []).map((it) => `
     <tr><td colspan="3">${esc(it.productName || it.name || "Item")}</td></tr>
     <tr>
@@ -122,7 +136,7 @@ export function receiptHtml(sale, settings, { copy = "" } = {}) {
       <td class="r">${num(it.netAmount ?? it.amount)}</td>
     </tr>`).join("");
 
-  const gstBlock = settings.gstEnabled && toNum(sale.tax) > 0 ? `
+  const gstBlock = gst && toNum(sale.tax) > 0 ? `
     <tr><td>Taxable</td><td class="r" colspan="2">${num(sale.taxableAmount)}</td></tr>
     ${toNum(sale.igst) > 0
       ? `<tr><td>IGST</td><td class="r" colspan="2">${num(sale.igst)}</td></tr>`
@@ -134,7 +148,7 @@ export function receiptHtml(sale, settings, { copy = "" } = {}) {
   <div class="c">${esc(settings.businessType || "")}</div>
   ${settings.address ? `<div class="c">${esc(settings.address)}</div>` : ""}
   ${settings.mobile ? `<div class="c">Ph: ${esc(settings.mobile)}</div>` : ""}
-  ${settings.gstEnabled && settings.gstin ? `<div class="c">GSTIN: ${esc(settings.gstin)}</div>` : ""}
+  ${gst && settings.gstin ? `<div class="c">GSTIN: ${esc(settings.gstin)}</div>` : ""}
   <hr>
   ${copy ? `<div class="c b">${esc(copy)}</div><hr>` : ""}
   <table>
@@ -180,9 +194,12 @@ export function receiptHtml(sale, settings, { copy = "" } = {}) {
  * any ESC/POS device (receipt printer or label printer).
  */
 export async function printLabels(jobs, settings, onProgress) {
-  const p = new Escpos(toNum(settings.printerWidth, 58));
   const widthMm = toNum(settings.labelWidthMm, 50);
   const heightMm = toNum(settings.labelHeightMm, 25);
+  const browser = usesBrowserPrint();
+  if (browser) return printLabelsViaBrowser(jobs, settings, widthMm, heightMm, onProgress);
+
+  const p = new Escpos(toNum(settings.printerWidth, 58));
   let done = 0;
   const total = jobs.reduce((a, j) => a + toNum(j.qty, 1), 0);
 
@@ -207,8 +224,47 @@ export async function printLabels(jobs, settings, onProgress) {
   return total;
 }
 
+/**
+ * Stickers through the print dialog - for a USB label printer (TVS LP 46 Neo
+ * and friends) driven from Windows. One sticker per page at the exact label
+ * size, so the driver feeds one label per print.
+ */
+async function printLabelsViaBrowser(jobs, settings, widthMm, heightMm, onProgress) {
+  let done = 0;
+  const total = jobs.reduce((a, j) => a + toNum(j.qty, 1), 0);
+  const pages = [];
+
+  for (const job of jobs) {
+    const canvas = await labelCanvas(job.product, {
+      widthMm, heightMm,
+      type: job.type || "qr",
+      showPrice: settings.labelShowPrice !== false,
+      shopName: settings.labelShowShopName ? settings.businessName : ""
+    });
+    const src = canvas.toDataURL("image/png");
+    const copies = Math.max(1, toNum(job.qty, 1));
+    for (let i = 0; i < copies; i++) {
+      pages.push(`<div class="lbl"><img src="${src}" alt=""></div>`);
+      done++;
+      if (onProgress) onProgress(done, total);
+    }
+  }
+
+  printHtmlFallback(pages.join(""), "Labels", {
+    page: `${widthMm}mm ${heightMm}mm`,
+    margin: "0",
+    css: `.lbl{width:${widthMm}mm;height:${heightMm}mm;overflow:hidden;page-break-after:always;break-after:page}
+          .lbl:last-child{page-break-after:auto;break-after:auto}
+          .lbl img{width:100%;height:100%;max-width:none;object-fit:contain;display:block}`
+  });
+  return total;
+}
+
 /** Print one 58/80mm-wide QR block for a single product (receipt printer style). */
 export async function printProductQr(product, settings, copies = 1, type = "qr") {
+  // No thermal transport? Print it as a normal sticker through the dialog.
+  if (usesBrowserPrint()) { await printLabels([{ product, qty: copies, type }], settings); return; }
+
   const p = new Escpos(toNum(settings.printerWidth, 58));
   for (let i = 0; i < copies; i++) {
     p.align("center").bold(true).line(trim(product.productName || "", p.cols)).bold(false);

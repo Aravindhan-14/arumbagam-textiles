@@ -2,7 +2,7 @@
    VYRA SAREES - Categories
    ============================================================ */
 import { state, on, can } from "../store.js";
-import { C, createDoc, updateDocById, removeDoc, writeBatch, db, newRef, serverTimestamp } from "../db.js";
+import { C, createDoc, updateDocById, removeDoc } from "../db.js";
 import { icon, openSheet, emptyState, ok, err, warn, busy, confirmDialog, formData, toast } from "../ui.js";
 import { esc, toNum, toInt, upper, matches, debounce } from "../utils.js";
 
@@ -110,15 +110,11 @@ async function seedDefaults() {
   if (!await confirmDialog("Add the 14 default boutique categories?", { okText: "Add them" })) return;
   try {
     busy(true, "Creating categories…");
-    const batch = writeBatch(db);
-    DEFAULTS.forEach(([name, code], i) => {
-      const r = newRef(C.categories);
-      batch.set(r, {
-        id: r.id, name, code, description: "", sortOrder: i + 1, status: "active",
-        createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    for (const [i, [name, code]] of DEFAULTS.entries()) {
+      await createDoc(C.categories, {
+        name, code, description: "", sortOrder: i + 1, status: "active"
       });
-    });
-    await batch.commit();
+    }
     ok("Default categories added");
   } catch (e) { err(e.message); } finally { busy(false); }
 }

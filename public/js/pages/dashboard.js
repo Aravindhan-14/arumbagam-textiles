@@ -1,8 +1,8 @@
 /* ============================================================
    VYRA SAREES - Dashboard
    ============================================================ */
-import { state, on, lowStockProducts, outOfStockProducts, totalStockUnits, stockValue, can } from "../store.js";
-import { queryRange, recent, C, where } from "../db.js";
+import { state, on, lowStockProducts, outOfStockProducts, totalStockUnits, stockValue, can, canSeeCost } from "../store.js";
+import { queryRange, recent, C } from "../db.js";
 import { icon, statCard, emptyState, toast } from "../ui.js";
 import { esc, money0, money, startOfDay, endOfDay, toNum, fmtTime, ago, sum, fmtDate } from "../utils.js";
 
@@ -36,17 +36,17 @@ export async function mount(view, { go }) {
         ${statCard("Out of Stock", out.length, "needs restocking", out.length ? "danger" : "")}
         ${statCard("Customers", state.customers.length, `${dues.length} with dues`)}
         ${statCard("Pending Payments", money0(dueTotal), "customer outstanding", dueTotal > 0 ? "warn" : "")}
-        ${can("reports.full") ? statCard("Stock Value", money0(stockValue()), "at purchase cost") : ""}
-        ${can("reports.full") ? statCard("Suppliers", state.suppliers.length, `${money0(sum(state.suppliers, (s) => s.outstanding))} payable`) : ""}
+        ${canSeeCost() ? statCard("Stock Value", money0(stockValue()), "at purchase cost") : ""}
+        ${canSeeCost() ? statCard("Suppliers", state.suppliers.length, `${money0(sum(state.suppliers, (s) => s.outstanding))} payable`) : ""}
       </div>
 
       <div class="sec-title">Quick Actions</div>
       <div class="quick mb">
-        <button data-go="#/billing">${icon("bill")}New Bill</button>
+        ${can("sales.create") ? `<button data-go="#/billing">${icon("bill")}New Bill</button>` : ""}
         <button data-go="#/scan">${icon("scan")}Scan Product</button>
-        <button data-act="add-product">${icon("plus")}Add Product</button>
-        <button data-go="#/inventory">${icon("stack")}Add Stock</button>
-        <button data-go="#/labels">${icon("qr")}Print QR</button>
+        ${can("products.create") ? `<button data-act="add-product">${icon("plus")}Add Product</button>` : ""}
+        ${can("inventory.view") ? `<button data-go="#/inventory">${icon("stack")}Add Stock</button>` : ""}
+        ${can("labels.print") ? `<button data-go="#/labels">${icon("qr")}Print QR</button>` : ""}
         <button data-go="#/sales">${icon("rupee")}Sales History</button>
       </div>
 
@@ -105,8 +105,9 @@ function setupCard() {
 
 function alerts(low, out, dues) {
   const items = [];
-  if (out.length) items.push({ cls: "danger", ic: "alert", t: `${out.length} product${out.length > 1 ? "s" : ""} out of stock`, s: out.slice(0, 3).map((p) => p.productName).join(", "), go: "#/inventory?filter=out" });
-  if (low.length) items.push({ cls: "warn", ic: "alert", t: `${low.length} product${low.length > 1 ? "s" : ""} running low`, s: low.slice(0, 3).map((p) => `${p.productName} (${p.stock})`).join(", "), go: "#/inventory?filter=low" });
+  const stockGo = (f) => (can("inventory.view") ? `#/inventory?filter=${f}` : `#/products?filter=${f}`);
+  if (out.length) items.push({ cls: "danger", ic: "alert", t: `${out.length} product${out.length > 1 ? "s" : ""} out of stock`, s: out.slice(0, 3).map((p) => p.productName).join(", "), go: stockGo("out") });
+  if (low.length) items.push({ cls: "warn", ic: "alert", t: `${low.length} product${low.length > 1 ? "s" : ""} running low`, s: low.slice(0, 3).map((p) => `${p.productName} (${p.stock})`).join(", "), go: stockGo("low") });
   if (dues.length) items.push({ cls: "info", ic: "rupee", t: `${dues.length} customer${dues.length > 1 ? "s" : ""} with pending payment`, s: money(sum(dues, (d) => d.outstanding)) + " outstanding", go: "#/customers?filter=due" });
   if (!items.length) return "";
   return `<div class="sec-title">Alerts</div>

@@ -2,25 +2,56 @@
    VYRA SAREES - Business settings
    ============================================================ */
 import { state, can, isAdmin } from "../store.js";
-import { saveSettings, uploadImage, DEFAULT_SETTINGS, peekBlockSize, ensureBlocks, logActivity, auth, sendPasswordResetEmail } from "../db.js";
+import { saveSettings, uploadImage, DEFAULT_SETTINGS, peekBlockSize, ensureBlocks, logActivity } from "../db.js";
+import { changePassword } from "../auth.js";
 import { icon, openSheet, emptyState, ok, err, warn, busy, confirmDialog, formData, toast } from "../ui.js";
-import { esc, toNum, toInt, validGstin, upper } from "../utils.js";
-import { setPaperWidth, printerMode, setPrinterMode, printerStatus, Escpos } from "../hw/printer.js";
+import { esc, fileUrl, toNum, toInt, validGstin, upper } from "../utils.js";
+import { setPaperWidth, printerMode, setPrinterMode, printerStatus, Escpos, printHtmlFallback } from "../hw/printer.js";
+import { usesBrowserPrint } from "../hw/documents.js";
 
 export const title = "Settings";
+
+/** Change the signed-in account's own password. */
+function passwordSheet() {
+  openSheet({
+    title: "Change my password",
+    body: `
+      <label class="field req"><span>Current password</span>
+        <input name="currentPassword" type="password" autocomplete="current-password" required></label>
+      <label class="field req"><span>New password</span>
+        <input name="newPassword" type="password" autocomplete="new-password" minlength="6" required></label>
+      <label class="field req"><span>Repeat the new password</span>
+        <input name="repeat" type="password" autocomplete="new-password" minlength="6" required></label>
+      <div id="pw-err" class="form-error hidden"></div>`,
+    footer: `<button class="btn btn-soft" data-close>Cancel</button>
+             <button class="btn btn-primary" id="pw-save">Change password</button>`,
+    onMount(api) {
+      const fail = (m) => { const b = api.root.querySelector("#pw-err"); b.textContent = m; b.classList.remove("hidden"); };
+      api.root.querySelector("#pw-save").onclick = async () => {
+        const d = formData(api.root);
+        if ((d.newPassword || "").length < 6) return fail("The new password must be at least 6 characters.");
+        if (d.newPassword !== d.repeat) return fail("The two new passwords do not match.");
+        try {
+          busy(true, "Saving…");
+          await changePassword(d.currentPassword, d.newPassword);
+          api.close(); ok("Password changed");
+        } catch (e) { fail(e.message); } finally { busy(false); }
+      };
+    }
+  });
+}
 
 export async function mount(view, { go }) {
   const editable = can("settings.manage");
   const s = { ...DEFAULT_SETTINGS, ...(state.settings || {}) };
 
   view.innerHTML = `
-    ${editable ? "" : `<div class="card"><p class="mb0 muted">You can view these settings but only the shop owner can change them.</p></div>`}
-
+    ${editable ? `
     <div class="sec-title">Business Information</div>
     <div class="card">
       <div class="flex mb">
         <div class="thumb" id="se-logo" style="width:64px;height:64px;border-radius:12px">
-          ${s.logoUrl ? `<img src="${esc(s.logoUrl)}">` : icon("tag")}
+          ${s.logoUrl ? `<img src="${esc(fileUrl(s.logoUrl))}">` : icon("tag")}
         </div>
         <div class="grow">
           <button class="btn btn-soft btn-sm" id="se-logo-btn" ${editable ? "" : "disabled"}>Shop logo</button>
@@ -40,6 +71,8 @@ export async function mount(view, { go }) {
     <div class="sec-title">GST</div>
     <div class="card">
       <label class="check"><input type="checkbox" name="gstEnabled" ${s.gstEnabled ? "checked" : ""}><span>Charge GST on bills</span></label>
+      <p class="form-note">This is the shop's normal setting. A single bill can still be switched
+        the other way with the <b>GST on / off</b> button on the billing screen.</p>
       <label class="field"><span>Business GSTIN</span><input name="gstin" class="mono" maxlength="15" value="${esc(s.gstin)}"></label>
       <div class="grid2">
         <label class="field"><span>Default GST rate</span>
@@ -82,13 +115,13 @@ export async function mount(view, { go }) {
       <label class="check"><input type="checkbox" name="allowNegativeStock" ${s.allowNegativeStock ? "checked" : ""}>
         <span>Allow selling when stock is zero</span></label>
       <p class="form-note">Leave this off so the app blocks sales of items you no longer have.</p>
-    </div>
+    </div>` : ""}
 
     <div class="sec-title">Printing</div>
     <div class="card">
       <div class="grid2">
         <label class="field"><span>Receipt paper width</span>
-          <select name="printerWidth">
+          <select name="printerWidth" ${editable ? "" : "disabled"}>
             <option value="58" ${toNum(s.printerWidth) === 58 ? "selected" : ""}>58 mm</option>
             <option value="80" ${toNum(s.printerWidth) === 80 ? "selected" : ""}>80 mm</option>
           </select></label>
@@ -100,6 +133,7 @@ export async function mount(view, { go }) {
             <option value="browser">Browser print</option>
           </select></label>
       </div>
+      ${editable ? `
       <div class="grid2">
         <label class="field"><span>Label width (mm)</span>
           <input name="labelWidthMm" type="number" inputmode="numeric" min="20" max="80" value="${toNum(s.labelWidthMm)}"></label>
@@ -107,7 +141,7 @@ export async function mount(view, { go }) {
           <input name="labelHeightMm" type="number" inputmode="numeric" min="10" max="80" value="${toNum(s.labelHeightMm)}"></label>
       </div>
       <label class="check"><input type="checkbox" name="labelShowPrice" ${s.labelShowPrice !== false ? "checked" : ""}><span>Print price on labels</span></label>
-      <label class="check"><input type="checkbox" name="labelShowShopName" ${s.labelShowShopName ? "checked" : ""}><span>Print shop name on labels</span></label>
+      <label class="check"><input type="checkbox" name="labelShowShopName" ${s.labelShowShopName ? "checked" : ""}><span>Print shop name on labels</span></label>` : ""}
       <div class="small muted mb">Printer status: ${esc(printerStatus().text)}</div>
       <div class="btn-row">
         <button class="btn btn-soft btn-sm" id="se-test">${icon("print")} Test print</button>
@@ -127,42 +161,53 @@ export async function mount(view, { go }) {
     <div class="small muted tc mt">VYRA SAREES · Boutique Billing &amp; Inventory · v1.0</div>`;
 
   /* ---------- wiring ---------- */
-  if (!editable) view.querySelectorAll("input,select,textarea").forEach((el) => { el.disabled = true; });
   view.querySelector("#se-printmode").value = printerMode();
   view.querySelector("#se-printmode").onchange = (e) => { setPrinterMode(e.target.value); ok("Print mode saved"); };
 
   let logoFile = null;
-  view.querySelector("#se-logo-btn").onclick = () => view.querySelector("#se-logo-file").click();
-  view.querySelector("#se-logo-file").onchange = (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    if (f.size > 2 * 1024 * 1024) return warn("Choose an image under 2 MB");
-    logoFile = f;
-    const r = new FileReader();
-    r.onload = () => { view.querySelector("#se-logo").innerHTML = `<img src="${r.result}">`; };
-    r.readAsDataURL(f);
-  };
+  const logoBtn = view.querySelector("#se-logo-btn");
+  if (logoBtn) {
+    logoBtn.onclick = () => view.querySelector("#se-logo-file").click();
+    view.querySelector("#se-logo-file").onchange = (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      if (f.size > 2 * 1024 * 1024) return warn("Choose an image under 2 MB");
+      logoFile = f;
+      const r = new FileReader();
+      r.onload = () => { view.querySelector("#se-logo").innerHTML = `<img src="${r.result}">`; };
+      r.readAsDataURL(f);
+    };
+  }
 
-  view.querySelector("#se-reserve").onclick = async () => {
+  const reserveBtn = view.querySelector("#se-reserve");
+  if (reserveBtn) reserveBtn.onclick = async () => {
     try { busy(true, "Reserving…"); await ensureBlocks(["invoice", "sku", "purchase", "return"]); ok(`${peekBlockSize("invoice")} invoice numbers ready`); }
     catch (e) { err(e.message); } finally { busy(false); }
   };
   view.querySelector("#se-hw").onclick = () => document.getElementById("hw-btn").click();
+  const fieldVal = (name, fallback) => {
+    const el = view.querySelector(`[name=${name}]`);
+    return (el && el.value) || fallback || "";
+  };
   view.querySelector("#se-test").onclick = async () => {
     try {
-      const p = new Escpos(toNum(view.querySelector("[name=printerWidth]").value, 58));
-      p.align("center").bold(true).size(2, 2).line(view.querySelector("[name=businessName]").value || "VYRA SAREES")
-        .size(1, 1).bold(false).line(view.querySelector("[name=businessType]").value || "")
+      if (usesBrowserPrint()) {
+        printHtmlFallback(
+          `<div class="c big">${esc(fieldVal("businessName", s.businessName) || "VYRA SAREES")}</div>
+           <div class="c">${esc(fieldVal("businessType", s.businessType))}</div><hr>
+           <table><tr><td>Test</td><td class="r">OK</td></tr></table><hr>
+           <div class="c">${esc(fieldVal("footerMessage", s.footerMessage) || "Thank you")}</div>`,
+          "Test print");
+        ok("Print preview opened"); return;
+      }
+      const p = new Escpos(toNum(fieldVal("printerWidth", s.printerWidth), 58));
+      p.align("center").bold(true).size(2, 2).line(fieldVal("businessName", s.businessName) || "VYRA SAREES")
+        .size(1, 1).bold(false).line(fieldVal("businessType", s.businessType))
         .rule().align("left").lr("Test", "OK").rule()
-        .align("center").line(view.querySelector("[name=footerMessage]").value || "Thank you").feed(2).cut();
+        .align("center").line(fieldVal("footerMessage", s.footerMessage) || "Thank you").feed(2).cut();
       await p.print(); ok("Test sent");
     } catch (e) { err(e.message); }
   };
-  view.querySelector("#se-pwd").onclick = async () => {
-    const email = state.user?.email;
-    if (!email) return;
-    if (!await confirmDialog(`Send a password reset link to ${email}?`, { okText: "Send" })) return;
-    try { await sendPasswordResetEmail(auth, email); ok("Reset link sent"); } catch (e) { err(e.message); }
-  };
+  view.querySelector("#se-pwd").onclick = () => passwordSheet();
 
   const saveBtn = view.querySelector("#se-save");
   if (saveBtn) saveBtn.onclick = async () => {
@@ -194,10 +239,10 @@ export async function mount(view, { go }) {
         labelShowPrice: !!d.labelShowPrice,
         labelShowShopName: !!d.labelShowShopName
       };
-      if (logoFile) patch.logoUrl = await uploadImage(logoFile, `business/logo_${Date.now()}_${logoFile.name}`);
+      if (logoFile) patch.logoUrl = await uploadImage(logoFile);
       await saveSettings(patch);
       setPaperWidth(patch.printerWidth);
-      logActivity(null, "SETTINGS_UPDATED", "Business settings saved");
+      logActivity("SETTINGS_UPDATED", "Business settings saved");
       ok("Settings saved");
     } catch (e) { console.error(e); err(e.message || "Could not save settings."); }
     finally { busy(false); }

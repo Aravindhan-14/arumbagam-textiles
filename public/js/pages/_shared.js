@@ -3,15 +3,15 @@
    (pickers, product / customer / supplier editors)
    ============================================================ */
 import {
-  C, createDoc, updateDocById, uploadImage, nextSkuSequence, queueStockChange,
-  writeBatch, db, ref, serverTimestamp, logActivity, getActor
+  C, createDoc, updateDocById, uploadImage, nextSkuSequence, addStock, logActivity, saveCost
 } from "../db.js";
 import {
-  state, searchProducts, searchCustomers, searchSuppliers, can, categoryById
+  state, searchProducts, searchCustomers, searchSuppliers, can, canSeeCost, categoryById,
+  refreshCosts
 } from "../store.js";
 import { icon, openSheet, toast, ok, err, warn, busy, confirmDialog, emptyState, formData } from "../ui.js";
 import {
-  esc, money, toNum, toInt, buildSku, buildBarcode, stockStatus, upper,
+  esc, fileUrl, money, toNum, toInt, buildSku, buildBarcode, stockStatus, upper,
   validMobile, validGstin, validEmail, debounce, searchTokens
 } from "../utils.js";
 
@@ -65,7 +65,7 @@ export function pickProduct(onPick, { includeOutOfStock = true } = {}) {
     },
     renderRow: (p) => {
       const st = stockStatus(p);
-      return `<div class="thumb">${p.imageUrl ? `<img src="${esc(p.imageUrl)}" alt="">` : esc((p.productName || "?").slice(0, 2).toUpperCase())}</div>
+      return `<div class="thumb">${p.imageUrl ? `<img src="${esc(fileUrl(p.imageUrl))}" alt="">` : esc((p.productName || "?").slice(0, 2).toUpperCase())}</div>
         <div class="mid"><b>${esc(p.productName)}</b><small>${esc(p.sku || "")} · ${esc(p.colour || "")} ${esc(p.size || "")}</small></div>
         <div class="end"><b>${money(p.sellingPrice)}</b><small class="pill ${st.cls}">${st.key === "ok" ? p.stock + " in stock" : st.label}</small></div>`;
     },
@@ -126,21 +126,27 @@ export const gstOptions = (sel) =>
 export function openProductEditor(product, onSaved) {
   // A partial object (e.g. a scanned barcode with no id yet) still counts as new.
   const isNew = !(product && product.id);
+  const showCost = canSeeCost();
   const s = state.settings || {};
   const p = {
     productName: "", sku: "", productCode: "", categoryId: "", subcategory: "", brand: "",
-    colour: "", fabric: "", size: "", purchasePrice: "", sellingPrice: "", discount: 0,
+    colour: "", fabric: "", size: "", sellingPrice: "", discount: 0,
     gstRate: toNum(s.defaultGstRate, 5), stock: 0, minimumStock: toNum(s.lowStockDefault, 3),
-    supplierId: "", barcode: "", description: "", status: "active", imageUrl: "",
+    barcode: "", description: "", status: "active", imageUrl: "",
     ...(product || {})
   };
+  // Purchase price and supplier are kept out of the product itself so staff
+  // devices never receive them; they come from the owner-only cost record.
+  const cost = product?.id ? state.costs[product.id] : null;
+  p.purchasePrice = showCost ? (cost?.purchasePrice ?? "") : "";
+  p.supplierId = showCost ? (cost?.supplierId || "") : "";
 
   openSheet({
     title: isNew ? "Add Product" : "Edit Product",
     body: `
       <div class="flex mb">
         <div class="thumb" id="pe-thumb" style="width:64px;height:64px;border-radius:12px">
-          ${p.imageUrl ? `<img src="${esc(p.imageUrl)}" alt="">` : icon("box")}
+          ${p.imageUrl ? `<img src="${esc(fileUrl(p.imageUrl))}" alt="">` : icon("box")}
         </div>
         <div class="grow">
           <button class="btn btn-soft btn-sm" id="pe-pick-img">${icon("plus")} Product image</button>
@@ -178,9 +184,9 @@ export function openProductEditor(product, onSaved) {
       </div>
       <label class="field"><span>Fabric / material</span><input name="fabric" value="${esc(p.fabric || "")}" placeholder="Kanchipuram silk"></label>
 
-      <div class="grid2">
-        <label class="field"><span>Purchase price</span>
-          <input name="purchasePrice" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(p.purchasePrice)}"></label>
+      <div class="${showCost ? "grid2" : ""}">
+        ${showCost ? `<label class="field"><span>Purchase price</span>
+          <input name="purchasePrice" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(p.purchasePrice)}"></label>` : ""}
         <label class="field req"><span>Selling price</span>
           <input name="sellingPrice" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(p.sellingPrice)}" required></label>
       </div>
@@ -199,7 +205,7 @@ export function openProductEditor(product, onSaved) {
           <input name="minimumStock" type="number" inputmode="numeric" step="1" min="0" value="${esc(p.minimumStock ?? 3)}"></label>
       </div>
 
-      <label class="field"><span>Supplier</span><select name="supplierId">${supplierOptions(p.supplierId)}</select></label>
+      ${showCost ? `<label class="field"><span>Supplier</span><select name="supplierId">${supplierOptions(p.supplierId)}</select></label>` : ""}
       <label class="field"><span>Description</span><textarea name="description">${esc(p.description || "")}</textarea></label>
       <label class="check"><input type="checkbox" name="active" ${(p.status || "active") === "active" ? "checked" : ""}><span>Active (available for billing)</span></label>
       <div id="pe-err" class="form-error hidden"></div>`,
@@ -234,7 +240,7 @@ export function openProductEditor(product, onSaved) {
         if (!d.productName.trim()) return fail("Product name is required.");
         if (!d.categoryId) return fail("Please choose a category.");
         if (toNum(d.sellingPrice) <= 0) return fail("Selling price must be greater than zero.");
-        if (toNum(d.purchasePrice) > toNum(d.sellingPrice)) {
+        if (showCost && toNum(d.purchasePrice) > toNum(d.sellingPrice)) {
           if (!await confirmDialog("Selling price is below the purchase price. Save anyway?", { okText: "Save" })) return;
         }
 
@@ -260,11 +266,9 @@ export function openProductEditor(product, onSaved) {
             categoryId: d.categoryId, categoryName: cat?.name || "",
             subcategory: d.subcategory.trim(), brand: d.brand.trim(),
             colour: d.colour.trim(), fabric: d.fabric.trim(), size: d.size.trim(),
-            purchasePrice: toNum(d.purchasePrice), sellingPrice: toNum(d.sellingPrice),
+            sellingPrice: toNum(d.sellingPrice),
             discount: toNum(d.discount), gstRate: toNum(d.gstRate),
             minimumStock: toInt(d.minimumStock, 0),
-            supplierId: d.supplierId || "",
-            supplierName: state.suppliers.find((x) => x.id === d.supplierId)?.name || "",
             description: d.description.trim(),
             status: d.active ? "active" : "inactive",
             qrData: barcode,
@@ -273,26 +277,35 @@ export function openProductEditor(product, onSaved) {
 
           let id = product?.id;
           if (isNew) {
-            payload.stock = toNum(d.stock);
+            // Create at zero, then book the opening stock as a real movement
+            // so the count and its history agree from the first day.
+            const opening = toNum(d.stock);
+            payload.stock = 0;
             id = await createDoc(C.products, payload);
-            if (payload.stock) {
-              const batch = writeBatch(db);
-              batch.set(ref(C.stockHistory, `${id}_open`), {
-                productId: id, productName: payload.productName, sku: payload.sku,
-                type: "OPENING", quantity: payload.stock, previousStock: 0, newStock: payload.stock,
-                referenceId: id, referenceNo: "", note: "Opening stock",
-                userId: getActor().uid, userName: getActor().name, createdAt: serverTimestamp()
-              });
-              await batch.commit();
+            if (opening) {
+              await addStock({ id }, opening, "OPENING", "Opening stock");
+              payload.stock = opening;
             }
-            logActivity(null, "PRODUCT_ADDED", `${payload.sku} · ${payload.productName}`, "product", id);
+            logActivity("PRODUCT_ADDED", `${payload.sku} · ${payload.productName}`, "product", id);
           } else {
             await updateDocById(C.products, id, payload);
-            logActivity(null, "PRODUCT_UPDATED", `${payload.sku} · ${payload.productName}`, "product", id);
+            logActivity("PRODUCT_UPDATED", `${payload.sku} · ${payload.productName}`, "product", id);
+          }
+
+          // The cost record is the owner's alone; it is only written when there
+          // is something to record, so a shop that does not track cost never
+          // creates one.
+          if (showCost && (toNum(d.purchasePrice) > 0 || d.supplierId || cost)) {
+            await saveCost(id, {
+              purchasePrice: toNum(d.purchasePrice),
+              supplierId: d.supplierId || "",
+              supplierName: state.suppliers.find((x) => x.id === d.supplierId)?.name || ""
+            });
+            await refreshCosts();
           }
 
           if (imageFile) {
-            imageUrl = await uploadImage(imageFile, `products/${id}/${Date.now()}_${imageFile.name}`);
+            imageUrl = await uploadImage(imageFile, `products/${id}`);
             await updateDocById(C.products, id, { imageUrl });
           }
 
@@ -407,7 +420,7 @@ export function openSupplierEditor(supplier, onSaved) {
    ============================================================ */
 export const productRow = (p) => {
   const st = stockStatus(p);
-  return `<div class="thumb">${p.imageUrl ? `<img src="${esc(p.imageUrl)}" alt="">` : esc((p.productName || "?").slice(0, 2).toUpperCase())}</div>
+  return `<div class="thumb">${p.imageUrl ? `<img src="${esc(fileUrl(p.imageUrl))}" alt="">` : esc((p.productName || "?").slice(0, 2).toUpperCase())}</div>
     <div class="mid">
       <b>${esc(p.productName)}${(p.status || "active") !== "active" ? ' <span class="pill mut">Inactive</span>' : ""}</b>
       <small>${esc(p.sku || "")}${p.colour ? " · " + esc(p.colour) : ""}${p.size ? " · " + esc(p.size) : ""}</small>

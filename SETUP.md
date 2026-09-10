@@ -1,204 +1,137 @@
-# VYRA SAREES — Setup Guide
+# VYRA SAREES — Setup
 
-Follow these steps once. It takes about 20 minutes.
-
----
-
-## Step 1 — Create the Firebase project
-
-1. Go to <https://console.firebase.google.com> and click **Add project**.
-   Name it something like `vyra-sarees`. Google Analytics is not needed.
-2. In the left menu open **Build → Authentication → Get started**, choose
-   **Email/Password**, and enable the first toggle. Save.
-3. Open **Build → Firestore Database → Create database**.
-   Choose **Production mode** and a location close to you (`asia-south1` for India).
-4. Open **Build → Storage → Get started** and accept the defaults.
+The shop's data lives in **Firebase** (project `vyra-sarees`): Firestore holds
+the products, bills and customers, Firebase Auth holds the logins, and Cloud
+Storage holds the photos. There is no database to install and no server to
+run — the phone or the till talks to Firebase directly, and keeps working
+from its own on-device copy when the Wi-Fi drops.
 
 ---
 
-## Step 2 — Register the web app and copy the config
+## 1. What you need once
 
-1. Click the gear icon → **Project settings**.
-2. Scroll to **Your apps** and click the **web** icon `</>`.
-3. Give it a nickname (`VYRA SAREES web`), register the app. **Do not** tick Hosting yet.
-4. Firebase shows a `firebaseConfig` object. Copy those values into
-   `public/js/firebase-config.js`:
+| | |
+|---|---|
+| **A Firebase project** | Already created: `vyra-sarees`. Its settings are in `public/js/firebase-config.js`. |
+| **Node.js 18 or newer** | <https://nodejs.org> — only to open the app on `http://localhost` on the shop PC, and to publish updates. |
 
-```js
-export const firebaseConfig = {
-  apiKey:            "AIza…",
-  authDomain:        "vyra-sarees.firebaseapp.com",
-  projectId:         "vyra-sarees",
-  storageBucket:     "vyra-sarees.appspot.com",
-  messagingSenderId: "123456789012",
-  appId:             "1:123456789012:web:abc123"
-};
+Check Node is there:
+
+```bash
+node -v
 ```
 
-> These values are **not** secrets — they identify the project. Access is controlled by
-> the security rules in `firestore.rules`, which this project ships with.
+---
+
+## 2. Turn on the three Firebase services
+
+In the [Firebase console](https://console.firebase.google.com) for
+**vyra-sarees**:
+
+1. **Build → Authentication → Get started → Sign-in method →
+   Email/Password → Enable.**
+2. **Build → Firestore Database → Create database →** production mode, region
+   `asia-south1` (Mumbai).
+3. **Build → Storage → Get started** (same region). This needs the Blaze plan
+   on new projects; if you skip it, everything works except product photos and
+   the shop logo.
 
 ---
 
-## Step 3 — Create the owner's login
+## 3. Publish the rules
 
-In the Firebase console: **Authentication → Users → Add user**.
-Enter the shop owner's email and a password (at least 6 characters). Save.
-
-This is the account that becomes the **admin** on first login.
-
----
-
-## Step 4 — Deploy
+The rules are what actually protect the shop — they decide who may read what,
+and they are the reason staff never receive cost prices. Install the Firebase
+CLI once:
 
 ```bash
 npm install -g firebase-tools
 firebase login
-cd "D:\vyra sarees"
-firebase use --add          # select the project you created, alias: default
-firebase deploy
 ```
 
-This uploads the app, the Firestore rules, the indexes and the Storage rules.
-The console prints a **Hosting URL** — that is the shop's app.
-
-**To test locally instead:**
+Then, from the project folder:
 
 ```bash
-firebase serve
-# then open http://localhost:5000
+firebase deploy --only firestore:rules,firestore:indexes,storage
 ```
 
----
-
-## Step 5 — First login and setup
-
-1. Open the Hosting URL on the phone (or laptop) and log in with the account from Step 3.
-2. The very first account on a new project automatically becomes the **administrator**.
-3. The dashboard shows a **Finish setting up** card. Work through it:
-
-   **a. Settings** — fill in the business name, address, mobile, GSTIN, GST rate,
-   invoice prefix and receipt footer. Press **Save Settings**.
-   *This is important:* saving closes the one-time bootstrap window in the security
-   rules, after which only admins can create admin accounts.
-
-   **b. Categories** — open Categories and tap **Load default boutique categories**
-   (Sarees, Silk, Cotton, Designer, Bridal, Chudidars, Kurtis, Blouses, Kids Wear,
-   Accessories, Jewellery…), or add your own. The 3–4 letter **code** on each category
-   becomes part of the SKU, e.g. `VYS-SAR-00125`.
-
-   **c. Products** — add your first products. Leave SKU, product code and barcode blank
-   and the app generates them.
-
-4. **Add to Home screen** from the Chrome menu so it opens like an app.
+Run this again any time `firestore.rules`, `firestore.indexes.json` or
+`storage.rules` changes.
 
 ---
 
-## Step 6 — Add staff
+## 4. Create the owner's account
 
-**Staff → Add Staff Member.** Enter a name, email and a temporary password, choose the
-role, and tick the permissions they need. The account is created without logging you
-out, and they can log in straight away.
+1. Start the app (below) and open it.
+2. On the login screen there is no sign-up: create the first account in the
+   console — **Authentication → Users → Add user** — with the owner's email
+   and a password.
+3. Log in with it. The **first** account to log in while the shop settings are
+   still empty becomes the **administrator** automatically.
+4. Go to **Settings**, fill in the shop details and press **Save Settings**.
+   That closes the window: no later account can make itself an admin.
 
-Sensible starting permissions for a shop assistant:
+Every other person is added by the owner from **Staff → Add Staff Member**,
+which creates their login and their permissions in one step.
 
-| Permission | Give it? |
-|---|---|
-| Create bills | ✅ yes |
-| Process returns & exchanges | ✅ usually |
-| Add / edit products | ⬜ owner only |
-| Adjust stock | ⬜ owner only |
-| Cancel bills | ⬜ owner only |
-| Change item price while billing | ⬜ owner only |
-| Full business reports | ⬜ owner only |
-| Change business settings | ⬜ owner only |
-
-The maximum discount a staff member may apply is set in **Settings → Selling Rules**
-(default 10%). Admins have no cap.
+> Use an email address each person can actually open. A forgotten password is
+> reset with an email link — the owner can send one from **Staff**, and the
+> person can use **Forgot password?** on the login screen themselves.
 
 ---
 
-## Step 7 — Pair the hardware
+## 5. Start the app in the shop
 
-### Bluetooth 2D scanner
-
-1. Put the scanner into **HID / Keyboard mode**. Most scanners have a setup barcode in
-   the manual labelled *"Bluetooth HID"* or *"Keyboard mode"* — scan it.
-2. On the phone: **Settings → Bluetooth → Pair new device** and pick the scanner.
-3. Open the app, go to **Scan** and scan any product tag. The code appears immediately.
-
-If nothing happens, the scanner is probably in SPP or BLE mode — rescan the HID setup
-barcode from its manual.
-
-### Bluetooth thermal printer
-
-1. Pair the printer in Android's Bluetooth settings first.
-2. In the app, tap the **hardware icon** in the top-right → **Connect**.
-3. Chrome shows its own device picker — choose the printer. (Chrome requires this
-   picker every session for security; it cannot be skipped.)
-4. Tap **Test print**.
-
-If Connect is greyed out, the browser has no Web Bluetooth. Install **RawBT** from the
-Play Store and set the print mode to **RawBT app** in the same panel.
-
-Set the paper width (58 mm or 80 mm) in **Settings → Printing**.
-
----
-
-## Step 8 — Print product labels
-
-1. Go to **QR / Barcode Labels**.
-2. Choose QR or barcode, then scan or tap products to add them. Each product defaults
-   to one label per piece in stock; adjust the quantity per product.
-3. **Preview** to check the layout, then **Print**.
-
-Label size is set in **Settings → Printing** (default 50 × 25 mm). If you do not have a
-label printer, the preview's **Print on A4** button lays the labels out on sticker sheets.
-
----
-
-## Daily use
+Double-click **`START VYRA SAREES.bat`**. It serves the `public` folder on
+port 5000 and opens the browser:
 
 ```
-Staff logs in
-  → New Bill
-  → scan tags (they drop straight into the cart)
-  → adjust quantity / discount
-  → attach the customer (needed for credit)
-  → Payment → method, amount received
-  → Save & Print
+This PC          http://localhost:5000
+Phone / tablet   http://<the PC's IP>:5000
 ```
 
-Stock decreases automatically, the sale is recorded, the customer's outstanding balance
-updates, and the bill prints. If the network is down it all still works and syncs later.
+Keep the black window open while the shop is billing. Phones on the same
+Wi-Fi can use the address it prints.
 
----
-
-## Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| Stuck on the loading screen | `js/firebase-config.js` still has the placeholder values, or the browser console shows a Firebase error |
-| "Missing or insufficient permissions" | The user's `users/{uid}` profile is missing, `status` is not `active`, or the rules were not deployed (`firebase deploy --only firestore:rules`) |
-| Login says the account is not active | An admin must open **Staff** and tick *Account active* |
-| A query fails with an index error | Click the link Firebase prints in the console, or run `firebase deploy --only firestore:indexes` |
-| Scanner types into the search box but nothing is found | The code is not on any product — check the barcode field, or scan from the Scan screen and use *Add a product with this code* |
-| Camera scan does nothing | Must be served over **https** (the hosted URL) or `localhost` — a plain `http://192.168.x.x` address blocks the camera. Allow the camera permission from the padlock icon |
-| Camera opens but never reads the code | It falls back to jsQR automatically after ~4s, which reads **QR only**. Print QR labels rather than barcodes for camera use, or use the Bluetooth scanner for 1D barcodes |
-| Printer connects but prints nothing | Try the other paper width; some printers need `Escpos` chunk delays — increase `CHUNK`/delay in `js/hw/printer.js` |
-| Receipt shows `Rs.` instead of `₹` | Expected: the rupee sign is not in the ESC/POS character set |
-| Invoice numbers run out offline | Go online once; the app reserves 25 at a time (see the Hardware panel) |
-
----
-
-## Backing up
-
-Firestore holds the live data. For scheduled backups enable
-**Firestore → Backups** in the Firebase console, or export on demand:
+To run it by hand:
 
 ```bash
-gcloud firestore export gs://YOUR-BUCKET/backups/$(date +%F)
+node tools/serve.js
 ```
 
-Every list screen in the app also has an **Export CSV** button (products, stock, sales,
-customers, suppliers, purchases, reports, activity log).
+---
+
+## 6. Or put it online (recommended)
+
+Firebase Hosting gives the shop a proper address that works from anywhere —
+home, a second shop, a phone on mobile data — with no PC left running:
+
+```bash
+firebase deploy --only hosting
+```
+
+The app is then at `https://vyra-sarees.web.app`. Add it to the phone's home
+screen and it behaves like an installed app.
+
+---
+
+## 7. Day-to-day
+
+| | |
+|---|---|
+| **Offline** | Billing continues with no network. Bills are held on the device and sent as soon as it returns. The invoice numbers are reserved in advance, so two tills can never mint the same number. |
+| **Backup** | Firestore keeps the data; for a copy of your own, export any screen to CSV from Reports. |
+| **Cost prices** | Purchase price, supplier, margin, profit and stock value are the owner's alone. They are stored in a separate collection that the rules do not open to staff, so a staff phone is never sent them at all. |
+| **GST** | Settings has a master **Charge GST on bills** switch, and the billing screen has a per-bill **GST on / off** button for a single estimate or a no-GST customer. |
+
+---
+
+## 8. If something is wrong
+
+| Symptom | Cause |
+|---|---|
+| Spins on "Still starting…" | The first open needs the internet. After that it works offline. |
+| "Missing or insufficient permissions" | The rules are not published yet — see step 3. |
+| Login works but the app says the account is not set up | That Auth user has no profile. Add them from **Staff**, or, if this is the very first account, save Settings while logged in as them. |
+| Photos do not upload | Cloud Storage is not enabled — see step 2. Everything else still works. |
+| A report says an index is needed | Run the deploy in step 3, or click the link in the browser console. |

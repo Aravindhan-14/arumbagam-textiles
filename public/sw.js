@@ -3,9 +3,10 @@
    ------------------------------------------------------------
    Caches the app shell so the phone opens instantly and keeps
    working through a dropped connection. Firebase traffic is
-   never cached - Firestore has its own offline persistence.
+   never touched here - the Firestore SDK has its own on-device
+   cache and replays writes made while offline.
    ============================================================ */
-const VERSION = "vyra-v2";
+const VERSION = "vyra-v5-firebase";
 const SHELL = [
   "./",
   "./index.html",
@@ -14,11 +15,11 @@ const SHELL = [
   "./img/icon.svg",
   "./js/app.js",
   "./js/auth.js",
+  "./js/firebase-config.js",
   "./js/db.js",
   "./js/store.js",
   "./js/ui.js",
   "./js/utils.js",
-  "./js/firebase-config.js",
   "./js/codes/codes.js",
   "./js/hw/printer.js",
   "./js/hw/camera.js",
@@ -66,8 +67,9 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
 
-  // Firebase / Google APIs: always straight to the network.
-  if (!sameOrigin && /(googleapis|gstatic|firebaseio|firebaseapp|cloudfunctions)\./.test(url.hostname)) return;
+  // Firebase looks after its own traffic: auth, Firestore's socket and the
+  // image bucket must never be answered from this cache.
+  if (/(^|\.)googleapis\.com$|(^|\.)firebaseio\.com$|(^|\.)firebasestorage\.app$|(^|\.)firebaseapp\.com$/.test(url.hostname)) return;
 
   // Navigations: network first so a new deploy is picked up quickly.
   if (req.mode === "navigate") {
@@ -82,7 +84,7 @@ self.addEventListener("fetch", (e) => {
   }
 
   // Static assets: cache first, refresh in the background.
-  if (sameOrigin || /cdnjs\.cloudflare\.com/.test(url.hostname)) {
+  if (sameOrigin || /cdnjs\.cloudflare\.com|www\.gstatic\.com/.test(url.hostname)) {
     e.respondWith(
       caches.match(req).then((hit) => {
         const net = fetch(req).then((r) => {

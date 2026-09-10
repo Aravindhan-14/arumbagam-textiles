@@ -7,7 +7,7 @@
    ============================================================ */
 import { state, findByCode, can } from "../store.js";
 import { icon, emptyState, toast, ok, err, warn, busy } from "../ui.js";
-import { esc, money, toNum, stockStatus } from "../utils.js";
+import { esc, fileUrl, money, toNum, stockStatus } from "../utils.js";
 import { setScanHandler } from "../app.js";
 import { scannerStatus } from "../hw/scanner.js";
 import { startCameraScanner, cameraSupport, preloadCameraDecoder } from "../hw/camera.js";
@@ -81,7 +81,7 @@ export async function mount(view, { params, go }) {
   const paintRecent = () => {
     recentEl.innerHTML = recents.length
       ? recents.map((p) => `<li class="row" data-id="${p.id}">
-          <div class="thumb">${p.imageUrl ? `<img src="${esc(p.imageUrl)}">` : esc((p.productName || "?").slice(0, 2).toUpperCase())}</div>
+          <div class="thumb">${p.imageUrl ? `<img src="${esc(fileUrl(p.imageUrl))}">` : esc((p.productName || "?").slice(0, 2).toUpperCase())}</div>
           <div class="mid"><b>${esc(p.productName)}</b><small>${esc(p.sku)}</small></div>
           <div class="end"><b>${money(p.sellingPrice)}</b></div></li>`).join("")
       : emptyState("No scans yet", "Scanned products appear here", "scan");
@@ -131,7 +131,7 @@ export async function mount(view, { params, go }) {
       <div class="card" style="border-color:var(--ok)">
         <div class="flex mb">
           <div class="thumb" style="width:72px;height:72px;border-radius:12px">
-            ${p.imageUrl ? `<img src="${esc(p.imageUrl)}">` : icon("box")}
+            ${p.imageUrl ? `<img src="${esc(fileUrl(p.imageUrl))}">` : icon("box")}
           </div>
           <div class="grow">
             <b style="font-size:16px">${esc(p.productName)}</b>

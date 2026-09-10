@@ -2,14 +2,18 @@
    VYRA SAREES - live local cache
    ------------------------------------------------------------
    Master data (products, categories, customers, suppliers) is
-   mirrored locally through onSnapshot listeners.  Everything the
-   UI searches runs against this cache, which keeps look-ups
-   instant and lets the shop keep billing while offline.
+   mirrored locally. Everything the UI searches runs against this
+   cache, which keeps look-ups instant on the counter phone.
+
+   Firestore pushes changes to us: each mirrored collection has a
+   live listener, so the first paint comes from the on-device
+   cache and after that only what actually changed is fetched -
+   a second till's price change turns up here on its own. The
+   last good copy is kept in localStorage as well, so the product
+   list still opens on a cold start with no network.
    ============================================================ */
-import {
-  col, onSnapshot, query, where, orderBy, loadSettings, setActor, ref, getDoc, C
-} from "./db.js";
-import { matches, toNum, upper } from "./utils.js";
+import { C, listCosts, loadSettings, watchDocs, watchSettings, setActor } from "./db.js";
+import { matches, sleep, toNum, upper } from "./utils.js";
 
 export const state = {
   user: null,               // { uid, name, email, role, permissions }
@@ -18,6 +22,7 @@ export const state = {
   categories: [],
   customers: [],
   suppliers: [],
+  costs: {},                // productId -> purchase price, owner only
   ready: { products: false, categories: false, customers: false, suppliers: false },
   online: navigator.onLine
 };
@@ -34,8 +39,86 @@ export function emit(evt, payload) {
   (listeners.get("*") || []).forEach((fn) => fn(evt, payload));
 }
 
+/* ---------- the mirrored collections ---------- */
+const byName = (a, b) =>
+  String(a.productName || a.name || "").localeCompare(String(b.productName || b.name || ""));
+
+const MIRRORS = {
+  products: { collection: C.products, sort: byName },
+  categories: {
+    collection: C.categories,
+    sort: (a, b) => toNum(a.sortOrder) - toNum(b.sortOrder) || byName(a, b)
+  },
+  customers: { collection: C.customers, sort: byName },
+  // Suppliers sit behind the cost wall, so staff never mirror them.
+  suppliers: { collection: C.suppliers, sort: byName, needs: () => canSeeCost() }
+};
+
+/* ---------- cost prices (owner only) ----------
+   These live in their own collection that the security rules open to the
+   admin alone, so a staff device is never sent them. */
+export async function refreshCosts() {
+  if (!canSeeCost()) { state.costs = {}; emit("costs", state.costs); return; }
+  try {
+    const map = {};
+    (await listCosts()).forEach((c) => {
+      map[c.productId || c.id] = {
+        purchasePrice: toNum(c.purchasePrice),
+        supplierId: c.supplierId || "",
+        supplierName: c.supplierName || ""
+      };
+    });
+    state.costs = map;
+  } catch {
+    // Permission denied or offline - carry on without the numbers.
+    state.costs = state.costs || {};
+  }
+  emit("costs", state.costs);
+}
+
+/** What we paid for one product. Zero for anyone who may not see costs. */
+export const costOf = (productId) => (canSeeCost() ? toNum(state.costs[productId]?.purchasePrice) : 0);
+
+/** The supplier we last bought this product from. Owner only. */
+export const costSupplier = (productId) => (canSeeCost() ? (state.costs[productId]?.supplierName || "") : "");
+
+const CACHE_KEY = "vyra.cache";
+
+function readCache() {
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "{}"); } catch { return {}; }
+}
+function writeCache(key, list) {
+  try {
+    const cache = readCache();
+    cache[key] = list;
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  } catch { /* quota or private mode - the cache is only a convenience */ }
+}
+
 /* ---------- lifecycle ---------- */
-let unsubs = [];
+let stops = [];
+let changeHandler = null;
+
+/** Publish one collection's documents. */
+function publish(key, docs) {
+  const mirror = MIRRORS[key];
+  state[key] = docs.slice().sort(mirror.sort);
+  state.ready[key] = true;
+  writeCache(key, state[key]);
+  emit(key, state[key]);
+  emit("data", key);
+}
+
+/** Put whatever was left on the device on screen while the data loads. */
+function seedFromCache(key) {
+  if (state.ready[key]) return;
+  const cached = readCache()[key];
+  if (Array.isArray(cached)) {
+    state[key] = cached;
+    state.ready[key] = true;
+    emit(key, state[key]);
+  }
+}
 
 export async function startStore(user) {
   stopStore();
@@ -44,38 +127,60 @@ export async function startStore(user) {
   state.settings = await loadSettings();
   emit("settings", state.settings);
 
-  const bind = (name, key, sortFn, q) => onSnapshot(
-    q || col(name),
-    (snap) => {
-      state[key] = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort(sortFn);
+  // Each mirror gets one live listener. The first callback normally arrives
+  // from the on-device cache within a tick, so the app opens on real data;
+  // the wait is capped so a blocked collection can never hold up the boot.
+  const firstPaints = Object.keys(MIRRORS).map((key) => {
+    const mirror = MIRRORS[key];
+    if (mirror.needs && !mirror.needs()) {             // e.g. staff and suppliers
+      state[key] = [];
       state.ready[key] = true;
       emit(key, state[key]);
-      emit("data", key);
-    },
-    (e) => { console.error(`${name} listener:`, e); emit("error", e); }
-  );
+      return Promise.resolve();
+    }
 
-  const byName = (a, b) => String(a.productName || a.name || "").localeCompare(String(b.productName || b.name || ""));
+    let done;
+    const ready = new Promise((res) => { done = res; });
+    stops.push(watchDocs(
+      mirror.collection,
+      (docs) => { publish(key, docs); done(); },
+      (e) => {
+        if (state.online) console.error(`${key} listener:`, e);
+        seedFromCache(key);
+        emit("error", e);
+        done();
+      }
+    ));
+    return Promise.race([ready, sleep(4000).then(() => seedFromCache(key))]);
+  });
 
-  unsubs = [
-    bind(C.products, "products", byName),
-    bind(C.categories, "categories", (a, b) => toNum(a.sortOrder) - toNum(b.sortOrder) || byName(a, b)),
-    bind(C.customers, "customers", byName),
-    bind(C.suppliers, "suppliers", byName),
-    onSnapshot(ref(C.settings, "business"), (s) => {
-      if (s.exists()) { state.settings = { ...state.settings, ...s.data(), _configured: true }; emit("settings", state.settings); }
-    }, () => {})
-  ];
+  await Promise.all(firstPaints);
+  await refreshCosts();
+
+  stops.push(watchSettings(
+    (s) => { state.settings = s; emit("settings", s); },
+    () => {}
+  ));
+
+  // Cost prices have no listener - they are read once and after any write,
+  // because only the owner ever holds them.
+  changeHandler = (e) => {
+    const name = e.detail?.collection;
+    if (name === C.productCosts) refreshCosts();
+  };
+  window.addEventListener("vyra:changed", changeHandler);
 }
 
 export function stopStore() {
-  unsubs.forEach((u) => { try { u(); } catch {} });
-  unsubs = [];
+  stops.forEach((off) => { try { off(); } catch { /* already gone */ } });
+  stops = [];
+  if (changeHandler) { window.removeEventListener("vyra:changed", changeHandler); changeHandler = null; }
   Object.keys(state.ready).forEach((k) => { state.ready[k] = false; });
   state.products = []; state.categories = []; state.customers = []; state.suppliers = [];
+  state.costs = {};
 }
 
-window.addEventListener("online", () => { state.online = true; emit("net", true); });
+window.addEventListener("online", () => { state.online = true; emit("net", true); refreshCosts(); });
 window.addEventListener("offline", () => { state.online = false; emit("net", false); });
 
 /* ---------- lookups ---------- */
@@ -84,7 +189,7 @@ export const categoryById = (id) => state.categories.find((c) => c.id === id) ||
 export const customerById = (id) => state.customers.find((c) => c.id === id) || null;
 export const supplierById = (id) => state.suppliers.find((s) => s.id === id) || null;
 
-/** Resolve a scanned / typed code to a product. Matches barcode, SKU, code or doc id. */
+/** Resolve a scanned / typed code to a product. Matches barcode, SKU, code or id. */
 export function findByCode(raw) {
   const code = String(raw || "").trim();
   if (!code) return null;
@@ -136,27 +241,51 @@ export const outOfStockProducts = () => state.products.filter(
   (p) => (p.status || "active") === "active" && toNum(p.stock) <= 0
 );
 export const totalStockUnits = () => state.products.reduce((a, p) => a + toNum(p.stock), 0);
-export const stockValue = () => state.products.reduce((a, p) => a + toNum(p.stock) * toNum(p.purchasePrice), 0);
+export const stockValue = () => state.products.reduce((a, p) => a + toNum(p.stock) * costOf(p.id), 0);
 
-/* ---------- permissions ---------- */
-const ADMIN_ONLY = new Set([
-  "products.delete", "products.create", "products.edit",
-  "categories.manage", "staff.manage", "settings.manage", "gst.manage",
-  "sales.cancel", "sales.editPrice", "purchases.manage", "suppliers.manage",
-  "reports.full", "inventory.adjust", "returns.create"
+/* ============================================================
+   Permissions
+   ------------------------------------------------------------
+   Firestore enforces all of this again on every single request -
+   see firestore.rules. What follows only decides what the UI
+   bothers to draw.
+
+   Staff start with the counter work only: billing, the product
+   list at selling price, customers and label printing. Anything
+   else has to be granted on the staff profile, and the owner's
+   own numbers - purchase price, margin, profit, supplier, stock
+   value - can never be granted at all.
+   ============================================================ */
+
+/** Held by every active staff account unless an admin turns it off. */
+const STAFF_DEFAULT = new Set([
+  "sales.create",
+  "products.view",
+  "customers.view",
+  "labels.print"
 ]);
+
+/** Owner only, whatever the profile says - these expose what we paid. */
+const ADMIN_ONLY = new Set(["cost.view", "purchases.manage", "suppliers.manage"]);
 
 export function isAdmin() { return state.user?.role === "admin"; }
 
-/** Admin can do everything; staff only what their user doc grants. */
+/** Admin can do everything; staff only what STAFF_DEFAULT or their profile grants. */
 export function can(permission) {
   if (!state.user) return false;
   if (state.user.role === "admin") return true;
+  if (ADMIN_ONLY.has(permission)) return false;
   const p = state.user.permissions || {};
   if (p[permission] === true) return true;
   if (p[permission] === false) return false;
-  return !ADMIN_ONLY.has(permission);
+  return STAFF_DEFAULT.has(permission);
 }
+
+/**
+ * Purchase price, margin, profit, supplier and stock value.
+ * The shop owner only - never shown to staff.
+ */
+export function canSeeCost() { return isAdmin(); }
 
 export function requireAdmin() {
   if (!isAdmin()) throw new Error("Admin permission required");

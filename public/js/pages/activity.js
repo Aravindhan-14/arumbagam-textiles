@@ -2,7 +2,7 @@
    VYRA SAREES - Activity / audit log
    ============================================================ */
 import { can } from "../store.js";
-import { C, col, query, orderBy, limit, getDocs, startAfter } from "../db.js";
+import { C, listDocs } from "../db.js";
 import { icon, emptyState, ok, err } from "../ui.js";
 import { esc, fmtDateTime, ago, matches, debounce, download, toCsv } from "../utils.js";
 
@@ -29,7 +29,7 @@ const ICON = {
 export async function mount(view, { go }) {
   if (!can("staff.manage")) { view.innerHTML = emptyState("Not permitted", "Only the shop owner can view the audit log", "alert"); return; }
 
-  let rows = [], cursor = null, q = "", done = false;
+  let rows = [], q = "", done = false;
 
   view.innerHTML = `
     <div class="searchbar">
@@ -55,12 +55,15 @@ export async function mount(view, { go }) {
 
   const load = async () => {
     try {
-      const parts = [orderBy("createdAt", "desc")];
-      if (cursor) parts.push(startAfter(cursor));
-      const snap = await getDocs(query(col(C.activity), ...parts, limit(50)));
-      if (snap.empty) { done = true; view.querySelector("#ac-more").textContent = "No more entries"; view.querySelector("#ac-more").disabled = true; }
-      cursor = snap.docs[snap.docs.length - 1] || cursor;
-      rows = rows.concat(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      const page = await listDocs(C.activity, {
+        orderBy: { field: "createdAt", dir: "desc" }, limit: 50, offset: rows.length
+      });
+      if (page.length < 50) {
+        done = true;
+        const more = view.querySelector("#ac-more");
+        more.textContent = "No more entries"; more.disabled = true;
+      }
+      rows = rows.concat(page);
       paint();
     } catch (e) {
       listEl.innerHTML = emptyState("Could not load the log", e.message, "alert");

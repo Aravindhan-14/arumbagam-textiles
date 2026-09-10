@@ -3,7 +3,7 @@
    ============================================================ */
 import { state, searchProducts, findByCode, can } from "../store.js";
 import { icon, openSheet, emptyState, ok, err, warn, busy, confirmDialog, toast } from "../ui.js";
-import { esc, money, toNum, toInt, debounce, sum } from "../utils.js";
+import { esc, fileUrl, money, toNum, toInt, debounce, sum } from "../utils.js";
 import { labelPreviewHtml, hydrateCodeSlots, labelCanvas, qrPayload } from "../codes/codes.js";
 import { printLabels } from "../hw/documents.js";
 import { printHtmlFallback, paperWidth } from "../hw/printer.js";
@@ -66,7 +66,7 @@ export async function mount(view, { go }) {
     const list = searchProducts(q, { status: "active" }).slice(0, 120);
     listEl.innerHTML = list.length ? list.map((p) => `
       <li class="row" data-add="${p.id}">
-        <div class="thumb">${p.imageUrl ? `<img src="${esc(p.imageUrl)}">` : esc((p.productName || "?").slice(0, 2).toUpperCase())}</div>
+        <div class="thumb">${p.imageUrl ? `<img src="${esc(fileUrl(p.imageUrl))}">` : esc((p.productName || "?").slice(0, 2).toUpperCase())}</div>
         <div class="mid"><b>${esc(p.productName)}</b><small>${esc(p.sku || "")} · ${toNum(p.stock)} in stock</small></div>
         <div class="end">${picked.has(p.id) ? `<span class="pill ok">${picked.get(p.id)}</span>` : icon("plus")}</div>
       </li>`).join("") : emptyState("No products", "", "box");

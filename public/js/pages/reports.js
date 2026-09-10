@@ -1,7 +1,7 @@
 /* ============================================================
    VYRA SAREES - Reports
    ============================================================ */
-import { state, can, lowStockProducts, outOfStockProducts, stockValue, totalStockUnits } from "../store.js";
+import { state, can, canSeeCost, costOf, lowStockProducts, outOfStockProducts, stockValue, totalStockUnits } from "../store.js";
 import { C, queryRange } from "../db.js";
 import { icon, emptyState, statCard, ok, err, warn, busy, toast } from "../ui.js";
 import {
@@ -19,7 +19,7 @@ const TABS = [
   { k: "staff", label: "Staff" },
   { k: "gst", label: "GST" },
   { k: "inventory", label: "Inventory" },
-  { k: "profit", label: "Profit" }
+  { k: "profit", label: "Profit", cost: true }
 ];
 
 export async function mount(view, { go }) {
@@ -39,7 +39,7 @@ export async function mount(view, { go }) {
     </div>
     <div class="small muted mb" id="rp-period"></div>
     <div class="chips" id="rp-tabs">
-      ${TABS.map((t) => `<button class="chip ${t.k === tab ? "on" : ""}" data-t="${t.k}">${t.label}</button>`).join("")}
+      ${TABS.filter((t) => !t.cost || canSeeCost()).map((t) => `<button class="chip ${t.k === tab ? "on" : ""}" data-t="${t.k}">${t.label}</button>`).join("")}
     </div>
     <div id="rp-body"></div>`;
 
@@ -66,7 +66,7 @@ export async function mount(view, { go }) {
         queryRange(C.returns, from, to).catch(() => [])
       ]);
       sales = sales.filter((s) => s.status !== "cancelled");
-      if (!can("reports.full")) sales = sales.filter((s) => s.staffId === state.user?.uid);
+      if (!can("sales.viewAll")) sales = sales.filter((s) => s.staffId === state.user?.uid);
       loaded = true;
     } catch (e) { body.innerHTML = emptyState("Could not load reports", e.message, "alert"); return; }
     paint();
@@ -153,21 +153,26 @@ function lineItems(sales) {
   return rows;
 }
 
+/* Bills do not store what the shop paid - that stays in the owner-only cost
+   record - so profit is worked out against the cost on file today. */
+const lineCost = (i) => costOf(i.productId) * toNum(i.qty);
+const lineProfit = (i) => round2(toNum(i.netAmount) - toNum(i.taxAmount) - lineCost(i));
+
 function productReport({ sales }) {
   const g = groupBy(lineItems(sales), (i) => i.productId || i.productName);
   const rows = [...g.entries()].map(([, items]) => ({
     name: items[0].productName, sku: items[0].sku,
     qty: sum(items, (i) => i.qty),
     amount: round2(sum(items, (i) => toNum(i.netAmount ?? i.amount))),
-    profit: round2(sum(items, (i) => toNum(i.netAmount) - toNum(i.taxAmount) - toNum(i.purchasePrice) * toNum(i.qty)))
+    profit: round2(sum(items, lineProfit))
   })).sort((a, b) => b.amount - a.amount);
 
   return `<div class="sec-title">Product-wise sales (${rows.length})</div>
     ${rows.length ? `<div class="card pad0 tbl-wrap"><table class="tbl">
-      <thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Sales</th>${can("reports.full") ? '<th class="num">Profit</th>' : ""}</tr></thead>
+      <thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Sales</th>${canSeeCost() ? '<th class="num">Profit</th>' : ""}</tr></thead>
       <tbody>${rows.map((r) => `<tr><td>${esc(r.name)}<br><span class="mono small muted">${esc(r.sku || "")}</span></td>
         <td class="num">${r.qty}</td><td class="num">${num(r.amount)}</td>
-        ${can("reports.full") ? `<td class="num" style="color:var(--${r.profit >= 0 ? "ok" : "danger"})">${num(r.profit)}</td>` : ""}</tr>`).join("")}</tbody>
+        ${canSeeCost() ? `<td class="num" style="color:var(--${r.profit >= 0 ? "ok" : "danger"})">${num(r.profit)}</td>` : ""}</tr>`).join("")}</tbody>
     </table></div>` : emptyState("No sales in this period", "", "chart")}
     <button class="btn btn-soft btn-sm mt" id="rp-export">${icon("download")} Export CSV</button>`;
 }
@@ -264,27 +269,27 @@ function inventoryReport() {
     <div class="stats mb">
       ${statCard("Products", state.products.length, "active + inactive")}
       ${statCard("Units", totalStockUnits(), "in stock")}
-      ${statCard("Stock value", money0(stockValue()), "at cost")}
+      ${canSeeCost() ? statCard("Stock value", money0(stockValue()), "at cost") : ""}
       ${statCard("Needs action", low.length + out.length, `${out.length} out · ${low.length} low`, low.length + out.length ? "warn" : "ok")}
     </div>
     <div class="sec-title">Stock position</div>
     <div class="card pad0 tbl-wrap"><table class="tbl">
-      <thead><tr><th>Product</th><th class="num">Stock</th><th class="num">Min</th><th class="num">Value</th></tr></thead>
+      <thead><tr><th>Product</th><th class="num">Stock</th><th class="num">Min</th>${canSeeCost() ? '<th class="num">Value</th>' : ""}</tr></thead>
       <tbody>${rows.map((p) => `<tr>
         <td>${esc(p.productName)}<br><span class="mono small muted">${esc(p.sku || "")}</span></td>
         <td class="num" style="color:var(--${toNum(p.stock) <= 0 ? "danger" : toNum(p.stock) <= toNum(p.minimumStock) ? "warn" : "text"})">${toNum(p.stock)}</td>
         <td class="num">${toNum(p.minimumStock)}</td>
-        <td class="num">${num(toNum(p.stock) * toNum(p.purchasePrice))}</td></tr>`).join("")}</tbody>
+        ${canSeeCost() ? `<td class="num">${num(toNum(p.stock) * costOf(p.id))}</td>` : ""}</tr>`).join("")}</tbody>
     </table></div>
     <button class="btn btn-soft btn-sm mt" id="rp-export">${icon("download")} Export CSV</button>`;
 }
 
 function profitReport({ sales, purchases }) {
-  if (!can("reports.full")) return emptyState("Not permitted", "Profit reports are limited to the shop owner", "alert");
+  if (!canSeeCost()) return emptyState("Not permitted", "Profit reports are limited to the shop owner", "alert");
   const items = lineItems(sales);
-  const withCost = items.filter((i) => toNum(i.purchasePrice) > 0);
+  const withCost = items.filter((i) => costOf(i.productId) > 0);
   const revenue = round2(sum(items, (i) => toNum(i.netAmount) - toNum(i.taxAmount)));
-  const cost = round2(sum(withCost, (i) => toNum(i.purchasePrice) * toNum(i.qty)));
+  const cost = round2(sum(withCost, lineCost));
   const profit = round2(revenue - cost);
   const coverage = items.length ? Math.round((withCost.length / items.length) * 100) : 0;
 
@@ -292,7 +297,7 @@ function profitReport({ sales, purchases }) {
     name: list[0].productName, sku: list[0].sku,
     qty: sum(list, (i) => i.qty),
     revenue: round2(sum(list, (i) => toNum(i.netAmount) - toNum(i.taxAmount))),
-    cost: round2(sum(list, (i) => toNum(i.purchasePrice) * toNum(i.qty)))
+    cost: round2(sum(list, lineCost))
   })).map((r) => ({ ...r, profit: round2(r.revenue - r.cost) })).sort((a, b) => b.profit - a.profit);
 
   return `
@@ -302,7 +307,7 @@ function profitReport({ sales, purchases }) {
       ${statCard("Gross profit", money0(profit), revenue ? ((profit / revenue) * 100).toFixed(1) + "% margin" : "", profit >= 0 ? "ok" : "danger")}
       ${statCard("Purchases", money0(sum(purchases, (p) => p.grandTotal)), "stock bought in period")}
     </div>
-    ${coverage < 100 ? `<p class="form-note">${coverage}% of sold items have a purchase price on record. Add purchase prices for a complete picture.</p>` : ""}
+    ${coverage < 100 ? `<p class="form-note">${coverage}% of sold items have a purchase price on record. Add purchase prices from the product screen for a complete picture.</p>` : ""}
     <div class="sec-title">Most profitable products</div>
     ${rows.length ? `<div class="card pad0 tbl-wrap"><table class="tbl">
       <thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Revenue</th><th class="num">Cost</th><th class="num">Profit</th></tr></thead>
@@ -334,9 +339,10 @@ function exportTab(tab, { sales, purchases, from, to }) {
     headers = [
       { label: "SKU", key: "sku" }, { label: "Product", key: "productName" },
       { label: "Category", key: "categoryName" }, { label: "Stock", key: "stock" },
-      { label: "Minimum", key: "minimumStock" }, { label: "Cost", key: "purchasePrice" },
+      { label: "Minimum", key: "minimumStock" },
+      ...(canSeeCost() ? [{ label: "Cost", get: (p) => costOf(p.id) }] : []),
       { label: "Selling", key: "sellingPrice" },
-      { label: "Value", get: (p) => (toNum(p.stock) * toNum(p.purchasePrice)).toFixed(2) }
+      ...(canSeeCost() ? [{ label: "Value", get: (p) => (toNum(p.stock) * costOf(p.id)).toFixed(2) }] : [])
     ];
   } else {
     rows = items; name = tab;
@@ -349,7 +355,7 @@ function exportTab(tab, { sales, purchases, from, to }) {
       { label: "Qty", key: "qty" }, { label: "Rate", key: "price" },
       { label: "Net", key: "netAmount" }, { label: "GST%", key: "gstRate" },
       { label: "Taxable", key: "taxableAmount" }, { label: "Tax", key: "taxAmount" },
-      { label: "Cost", key: "purchasePrice" }
+      ...(canSeeCost() ? [{ label: "Cost", get: (i) => costOf(i.productId) }] : [])
     ];
   }
   download(`vyra-${name}-${stamp}.csv`, toCsv(rows, headers));

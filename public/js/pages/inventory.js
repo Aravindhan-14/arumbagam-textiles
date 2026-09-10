@@ -1,12 +1,10 @@
 /* ============================================================
    VYRA SAREES - Inventory: stock levels, adjustments, history
    ============================================================ */
-import { state, on, searchProducts, can, lowStockProducts, outOfStockProducts, totalStockUnits, stockValue } from "../store.js";
-import {
-  C, col, query, where, orderBy, limit, getDocs, addStock, adjustStock, updateDocById
-} from "../db.js";
+import { state, on, searchProducts, can, canSeeCost, costOf, lowStockProducts, outOfStockProducts, totalStockUnits, stockValue } from "../store.js";
+import { C, listDocs, addStock, adjustStock, updateDocById } from "../db.js";
 import { icon, openSheet, emptyState, statCard, ok, err, warn, busy, confirmDialog, formData, toast } from "../ui.js";
-import { esc, money, money0, toNum, toInt, debounce, stockStatus, fmtDateTime, download, toCsv, ago } from "../utils.js";
+import { esc, fileUrl, money, money0, toNum, toInt, debounce, stockStatus, fmtDateTime, download, toCsv, ago } from "../utils.js";
 import { pickProduct } from "./_shared.js";
 import { setScanHandler } from "../app.js";
 import { findByCode } from "../store.js";
@@ -31,7 +29,7 @@ export async function mount(view, { params, go }) {
     view.innerHTML = `
       <div class="stats mb">
         ${statCard("Total Units", totalStockUnits(), `${state.products.length} products`)}
-        ${statCard("Stock Value", money0(stockValue()), "at purchase cost")}
+        ${canSeeCost() ? statCard("Stock Value", money0(stockValue()), "at purchase cost") : ""}
         ${statCard("Low Stock", lowStockProducts().length, "reorder soon", lowStockProducts().length ? "warn" : "")}
         ${statCard("Out of Stock", outOfStockProducts().length, "unavailable", outOfStockProducts().length ? "danger" : "")}
       </div>
@@ -49,7 +47,7 @@ export async function mount(view, { params, go }) {
         ${list.length ? list.slice(0, 250).map((p) => {
           const st = stockStatus(p);
           return `<li class="row" data-id="${p.id}">
-            <div class="thumb">${p.imageUrl ? `<img src="${esc(p.imageUrl)}">` : esc((p.productName || "?").slice(0, 2).toUpperCase())}</div>
+            <div class="thumb">${p.imageUrl ? `<img src="${esc(fileUrl(p.imageUrl))}">` : esc((p.productName || "?").slice(0, 2).toUpperCase())}</div>
             <div class="mid"><b>${esc(p.productName)}</b>
               <small>${esc(p.sku || "")} · min ${toNum(p.minimumStock)}</small></div>
             <div class="end"><b style="color:var(--${st.cls === "ok" ? "text" : st.cls})">${toNum(p.stock)}</b>
@@ -71,8 +69,10 @@ export async function mount(view, { params, go }) {
         { label: "Category", key: "categoryName" }, { label: "Stock", key: "stock" },
         { label: "Minimum", key: "minimumStock" },
         { label: "Status", get: (p) => stockStatus(p).label },
-        { label: "Cost", key: "purchasePrice" },
-        { label: "Stock value", get: (p) => (toNum(p.stock) * toNum(p.purchasePrice)).toFixed(2) }
+        ...(canSeeCost() ? [
+          { label: "Cost", get: (p) => costOf(p.id) },
+          { label: "Stock value", get: (p) => (toNum(p.stock) * costOf(p.id)).toFixed(2) }
+        ] : [])
       ]));
       ok("Stock exported");
     };
@@ -168,8 +168,10 @@ export function stockSheet(p, onChange) {
       /* history */
       const ul = root.querySelector("#sk-hist");
       try {
-        const snap = await getDocs(query(col(C.stockHistory), where("productId", "==", p.id), orderBy("createdAt", "desc"), limit(30)));
-        const rows = snap.docs.map((d) => d.data());
+        const rows = await listDocs(C.stockHistory, {
+          where: [["productId", "==", p.id]],
+          orderBy: { field: "createdAt", dir: "desc" }, limit: 30
+        });
         ul.innerHTML = rows.length ? rows.map((h) => `
           <li class="row" style="cursor:default">
             <div class="thumb" style="background:var(--surface-2);border:none">${icon(toNum(h.quantity) > 0 ? "plus" : "trash")}</div>

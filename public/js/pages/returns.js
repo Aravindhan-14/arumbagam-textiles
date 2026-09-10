@@ -2,10 +2,7 @@
    VYRA SAREES - Returns & Exchange
    ============================================================ */
 import { state, can, productById, findByCode } from "../store.js";
-import {
-  C, col, query, where, orderBy, limit, getDocs, getDoc, ref,
-  createReturn, nextReturnNumber, queryRange
-} from "../db.js";
+import { C, listDocs, getDocById, createReturn, nextReturnNumber, queryRange } from "../db.js";
 import { icon, openSheet, emptyState, ok, err, warn, busy, confirmDialog, toast, statCard } from "../ui.js";
 import {
   esc, money, num, toNum, toInt, round2, fmtDate, fmtTime, fmtDateTime,
@@ -21,8 +18,8 @@ const REASONS = ["Size issue", "Colour not suitable", "Damaged / defective", "Cu
 export async function mount(view, { params, go }) {
   if (!can("returns.create")) { view.innerHTML = emptyState("Not permitted", "Ask the shop owner for access", "alert"); return; }
   if (params.sale) {
-    const snap = await getDoc(ref(C.sales, params.sale));
-    if (snap.exists()) return builder(view, { id: snap.id, ...snap.data() }, go);
+    const found = await getDocById(C.sales, params.sale);
+    if (found) return builder(view, found, go);
   }
   return landing(view, go);
 }
@@ -44,8 +41,8 @@ async function landing(view, go) {
   const listEl = view.querySelector("#rt-list");
   let sales = [];
   try {
-    const snap = await getDocs(query(col(C.sales), orderBy("createdAt", "desc"), limit(40)));
-    sales = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((s) => s.status !== "cancelled");
+    const list = await listDocs(C.sales, { orderBy: { field: "createdAt", dir: "desc" }, limit: 40 });
+    sales = list.filter((s) => s.status !== "cancelled");
   } catch (e) { listEl.innerHTML = emptyState("Could not load bills", e.message, "alert"); }
 
   const paintList = (rows) => {
@@ -70,8 +67,8 @@ async function landing(view, go) {
       [s.invoiceNumber, s.customerName, s.customerMobile].join(" ").toLowerCase().includes(t.toLowerCase()));
     if (local.length) return paintList(local);
     try {
-      const snap = await getDocs(query(col(C.sales), where("invoiceNumber", "==", t.toUpperCase()), limit(5)));
-      paintList(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      const hits = await listDocs(C.sales, { where: [["invoiceNumber", "==", t.toUpperCase()]], limit: 5 });
+      paintList(hits);
     } catch { paintList([]); }
   };
   view.querySelector("#rt-q").oninput = debounce((e) => search(e.target.value), 250);

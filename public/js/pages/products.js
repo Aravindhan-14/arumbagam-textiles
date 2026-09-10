@@ -1,10 +1,10 @@
 /* ============================================================
    VYRA SAREES - Products
    ============================================================ */
-import { state, on, searchProducts, can, findByCode } from "../store.js";
+import { state, on, searchProducts, can, canSeeCost, costOf, costSupplier, findByCode } from "../store.js";
 import { C, updateDocById, removeDoc, logActivity } from "../db.js";
 import { icon, openSheet, emptyState, toast, ok, err, warn, busy, confirmDialog } from "../ui.js";
-import { esc, money, toNum, debounce, stockStatus, fmtDate, download, toCsv } from "../utils.js";
+import { esc, fileUrl, money, toNum, debounce, stockStatus, fmtDate, download, toCsv } from "../utils.js";
 import { openProductEditor, productRow, pickProduct } from "./_shared.js";
 import { setScanHandler } from "../app.js";
 import { qrCanvas, barcodeCanvas, qrPayload, qrDetail } from "../codes/codes.js";
@@ -32,7 +32,7 @@ export async function mount(view, { params, go }) {
     <ul class="list card pad0" id="pr-list"></ul>
     <div class="btn-row mt">
       <button class="btn btn-soft btn-sm" id="pr-export">${icon("download")} Export CSV</button>
-      <button class="btn btn-soft btn-sm" id="pr-labels">${icon("qr")} Print labels</button>
+      ${can("labels.print") ? `<button class="btn btn-soft btn-sm" id="pr-labels">${icon("qr")} Print labels</button>` : ""}
     </div>`;
 
   const listEl = view.querySelector("#pr-list");
@@ -86,7 +86,8 @@ export async function mount(view, { params, go }) {
   };
   const addBtn = view.querySelector("#pr-add");
   if (addBtn) addBtn.onclick = () => openProductEditor(null, () => { paint(); });
-  view.querySelector("#pr-labels").onclick = () => go("#/labels");
+  const labelsBtn = view.querySelector("#pr-labels");
+  if (labelsBtn) labelsBtn.onclick = () => go("#/labels");
   view.querySelector("#pr-export").onclick = () => {
     const list = searchProducts(q, filter);
     download(`vyra-products-${Date.now()}.csv`, toCsv(list, [
@@ -94,7 +95,8 @@ export async function mount(view, { params, go }) {
       { label: "Category", key: "categoryName" }, { label: "Colour", key: "colour" },
       { label: "Size", key: "size" }, { label: "Fabric", key: "fabric" },
       { label: "Barcode", key: "barcode" },
-      { label: "Purchase", key: "purchasePrice" }, { label: "Selling", key: "sellingPrice" },
+      ...(canSeeCost() ? [{ label: "Purchase", get: (p) => costOf(p.id) }] : []),
+      { label: "Selling", key: "sellingPrice" },
       { label: "GST%", key: "gstRate" }, { label: "Stock", key: "stock" },
       { label: "Min", key: "minimumStock" }, { label: "Status", key: "status" }
     ]));
@@ -118,7 +120,9 @@ export function openProductSheet(id, onChange, go) {
   const p = state.products.find((x) => x.id === id);
   if (!p) return err("Product not found");
   const st = stockStatus(p);
-  const margin = toNum(p.sellingPrice) - toNum(p.purchasePrice);
+  const showCost = canSeeCost();
+  const cost = costOf(p.id);
+  const margin = toNum(p.sellingPrice) - cost;
   const marginPct = toNum(p.sellingPrice) ? (margin / toNum(p.sellingPrice)) * 100 : 0;
 
   openSheet({
@@ -126,7 +130,7 @@ export function openProductSheet(id, onChange, go) {
     body: `
       <div class="flex mb">
         <div class="thumb" style="width:84px;height:84px;border-radius:12px">
-          ${p.imageUrl ? `<img src="${esc(p.imageUrl)}" alt="">` : icon("box")}
+          ${p.imageUrl ? `<img src="${esc(fileUrl(p.imageUrl))}" alt="">` : icon("box")}
         </div>
         <div class="grow">
           <div style="font-size:22px;font-weight:700">${money(p.sellingPrice)}</div>
@@ -143,11 +147,11 @@ export function openProductSheet(id, onChange, go) {
         ${detailRow("Fabric", p.fabric || "-")}
         ${detailRow("Product code", p.productCode || "-", true)}
         ${detailRow("Barcode", p.barcode || "-", true)}
-        ${detailRow("Purchase price", money(p.purchasePrice))}
-        ${detailRow("Margin", `${money(margin)} (${marginPct.toFixed(1)}%)`)}
+        ${showCost ? detailRow("Purchase price", cost ? money(cost) : "Not recorded") : ""}
+        ${showCost ? detailRow("Margin", `${money(margin)} (${marginPct.toFixed(1)}%)`) : ""}
         ${detailRow("GST", `${toNum(p.gstRate)}%`)}
         ${detailRow("Minimum stock", toNum(p.minimumStock))}
-        ${detailRow("Supplier", p.supplierName || "-")}
+        ${showCost ? detailRow("Supplier", costSupplier(p.id) || "-") : ""}
         ${detailRow("Added", fmtDate(p.createdAt))}
       </div>
       ${p.description ? `<p class="small muted">${esc(p.description)}</p>` : ""}
@@ -208,7 +212,7 @@ export function openProductSheet(id, onChange, go) {
           ? "Deactivate this product? It will no longer appear in billing."
           : "Reactivate this product?", { okText: next === "inactive" ? "Deactivate" : "Reactivate", danger: next === "inactive" })) return;
         await updateDocById(C.products, p.id, { status: next });
-        logActivity(null, "PRODUCT_UPDATED", `${p.sku} set ${next}`, "product", p.id);
+        logActivity("PRODUCT_UPDATED", `${p.sku} set ${next}`, "product", p.id);
         api.close(); ok(next === "inactive" ? "Product deactivated" : "Product reactivated");
         if (onChange) onChange();
       };

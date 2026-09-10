@@ -1,7 +1,7 @@
 /* ============================================================
    VYRA SAREES - Purchases (stock in from suppliers)
    ============================================================ */
-import { state, can, findByCode, supplierById } from "../store.js";
+import { state, can, costOf, findByCode, supplierById } from "../store.js";
 import { C, queryRange, recent, createPurchase, nextPurchaseNumber } from "../db.js";
 import { icon, openSheet, emptyState, statCard, ok, err, warn, busy, confirmDialog, toast } from "../ui.js";
 import {
@@ -189,7 +189,7 @@ function newPurchase(view, go) {
     if (ex) ex.qty += qty;
     else lines.unshift({
       product: p, qty,
-      rate: toNum(p.purchasePrice) || round2(toNum(p.sellingPrice) * 0.7),
+      rate: costOf(p.id) || round2(toNum(p.sellingPrice) * 0.7),
       gstRate: toNum(p.gstRate), discount: 0
     });
     paint();

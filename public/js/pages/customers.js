@@ -2,10 +2,7 @@
    VYRA SAREES - Customers
    ============================================================ */
 import { state, on, searchCustomers, can } from "../store.js";
-import {
-  C, col, query, where, orderBy, limit, getDocs, ref, updateDoc, increment,
-  serverTimestamp, logActivity, removeDoc
-} from "../db.js";
+import { C, listDocs, updateDocById, removeDoc, incr, logActivity } from "../db.js";
 import { icon, openSheet, emptyState, statCard, ok, err, warn, busy, confirmDialog, toast } from "../ui.js";
 import { esc, money, money0, toNum, debounce, fmtDate, fmtTime, sum, download, toCsv } from "../utils.js";
 import { openCustomerEditor } from "./_shared.js";
@@ -102,8 +99,10 @@ export function customerSheet(c, onChange, go) {
 
       const ul = api.root.querySelector("#cs-bills");
       try {
-        const snap = await getDocs(query(col(C.sales), where("customerId", "==", c.id), orderBy("createdAt", "desc"), limit(40)));
-        const bills = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const bills = await listDocs(C.sales, {
+          where: [["customerId", "==", c.id]],
+          orderBy: { field: "createdAt", dir: "desc" }, limit: 40
+        });
         ul.innerHTML = bills.length ? bills.map((s) => `
           <li class="row" data-bill="${s.id}">
             <div class="thumb">${icon("bill")}</div>
@@ -142,10 +141,10 @@ function collectSheet(c, onDone) {
         if (amt > toNum(c.outstanding) + 0.01) { box.textContent = "Amount is more than the outstanding balance."; box.classList.remove("hidden"); return; }
         try {
           busy(true, "Recording…");
-          await updateDoc(ref(C.customers, c.id), {
-            outstanding: increment(-amt), lastPaymentAt: serverTimestamp(), updatedAt: serverTimestamp()
+          await updateDocById(C.customers, c.id, {
+            outstanding: incr(-amt), lastPaymentAt: new Date().toISOString()
           });
-          logActivity(null, "PAYMENT_RECEIVED",
+          logActivity("PAYMENT_RECEIVED",
             `${c.name} · ₹${amt} · ${api.root.querySelector("#cp-method").value}${api.root.querySelector("#cp-note").value ? " · " + api.root.querySelector("#cp-note").value : ""}`,
             "customer", c.id);
           api.close(); ok(`${money(amt)} recorded`); onDone();

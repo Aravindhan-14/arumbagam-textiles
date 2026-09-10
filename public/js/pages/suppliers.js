@@ -2,10 +2,7 @@
    VYRA SAREES - Suppliers
    ============================================================ */
 import { state, on, searchSuppliers, can } from "../store.js";
-import {
-  C, col, query, where, orderBy, limit, getDocs, ref, updateDoc, increment,
-  serverTimestamp, logActivity
-} from "../db.js";
+import { C, listDocs, updateDocById, incr, logActivity } from "../db.js";
 import { icon, openSheet, emptyState, statCard, ok, err, busy, toast } from "../ui.js";
 import { esc, money, money0, toNum, debounce, fmtDate, sum, download, toCsv } from "../utils.js";
 import { openSupplierEditor } from "./_shared.js";
@@ -95,8 +92,10 @@ function supplierSheet(s, onChange, go) {
 
       const ul = api.root.querySelector("#ss-list");
       try {
-        const snap = await getDocs(query(col(C.purchases), where("supplierId", "==", s.id), orderBy("createdAt", "desc"), limit(30)));
-        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const rows = await listDocs(C.purchases, {
+          where: [["supplierId", "==", s.id]],
+          orderBy: { field: "createdAt", dir: "desc" }, limit: 30
+        });
         ul.innerHTML = rows.length ? rows.map((p) => `
           <li class="row" style="cursor:default">
             <div class="thumb">${icon("cart")}</div>
@@ -129,8 +128,8 @@ function paySheet(s, onDone) {
         }
         try {
           busy(true, "Recording…");
-          await updateDoc(ref(C.suppliers, s.id), { outstanding: increment(-amt), updatedAt: serverTimestamp() });
-          logActivity(null, "SUPPLIER_PAID", `${s.name} · ₹${amt}`, "supplier", s.id);
+          await updateDocById(C.suppliers, s.id, { outstanding: incr(-amt) });
+          logActivity("SUPPLIER_PAID", `${s.name} · ₹${amt}`, "supplier", s.id);
           api.close(); ok("Payment recorded"); onDone();
         } catch (e) { box.textContent = e.message; box.classList.remove("hidden"); } finally { busy(false); }
       };

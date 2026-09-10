@@ -96,7 +96,10 @@ export async function sendBytes(bytes) {
   if (mode === "rawbt") return sendViaRawBT(bytes);
   if (mode === "bluetooth" || state.characteristic) return writeRaw(bytes);
   if (navigator.bluetooth) { await connectPrinter(); return writeRaw(bytes); }
-  return sendViaRawBT(bytes);
+  // The rawbt: link only leads anywhere on Android; elsewhere say so plainly
+  // instead of appearing to print and doing nothing.
+  if (/android/i.test(navigator.userAgent)) return sendViaRawBT(bytes);
+  throw new Error('No thermal printer is connected. Connect the Bluetooth printer, or set Print mode to "Browser print" in Settings.');
 }
 
 /** Hand the job to the RawBT Android app (rawbt:base64,...). */
@@ -226,18 +229,24 @@ export class Escpos {
 }
 
 /* ---------- browser print fallback ---------- */
-export function printHtmlFallback(html, title = "Receipt") {
+/**
+ * Opens the job in a window and calls print(), so any printer installed in
+ * Windows (USB label printers included) can be used from the print dialog.
+ * `page` / `margin` set the CSS @page box - stickers need their own size.
+ */
+export function printHtmlFallback(html, title = "Receipt", { page, margin, css = "" } = {}) {
   const w = window.open("", "_blank", "width=380,height=640");
   if (!w) { alert("Please allow pop-ups to use browser printing."); return; }
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
     <style>
-      @page{size:${state.width}mm auto;margin:3mm}
+      @page{size:${page || `${state.width}mm auto`};margin:${margin || "3mm"}}
       body{font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.45;margin:0;color:#000}
       .c{text-align:center}.r{text-align:right}.b{font-weight:700}
       hr{border:none;border-top:1px dashed #000;margin:5px 0}
       table{width:100%;border-collapse:collapse}td{padding:1px 0;vertical-align:top}
       .big{font-size:15px;font-weight:700}
       img,canvas{max-width:100%}
+      ${css}
     </style></head><body>${html}</body></html>`);
   w.document.close();
   setTimeout(() => { w.focus(); w.print(); }, 350);

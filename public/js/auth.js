@@ -1,12 +1,22 @@
 /* ============================================================
    VYRA SAREES - authentication & session
+   ------------------------------------------------------------
+   Firebase Auth holds the session, so reopening the app on the
+   phone does not ask for the password again. Who a person is
+   (admin or staff, and what they may do) lives in their
+   users/{uid} profile, which the security rules read on every
+   single request - so switching an account off takes effect on
+   that person's next tap, everywhere.
    ============================================================ */
 import {
-  auth, db, C, ref, getDoc, setDoc, updateDoc, getDocs, query, col, limit,
-  serverTimestamp, signInWithEmailAndPassword, signOut, onAuthStateChanged,
-  sendPasswordResetEmail, logActivity, ensureBlocks
+  auth, db, C, doc, getDoc, setDoc, updateDoc, getDocs, query, collection, limit,
+  serverTimestamp, Timestamp, signInWithEmailAndPassword, signOut, onAuthStateChanged,
+  sendPasswordResetEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential,
+  logActivity, ensureBlocks, flushOutbox
 } from "./db.js";
 import { startStore, stopStore, state } from "./store.js";
+
+const userRef = (uid) => doc(db, C.users, uid);
 
 /** Friendly text for Firebase auth error codes. */
 export function authMessage(e) {
@@ -14,62 +24,114 @@ export function authMessage(e) {
   if (c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found"))
     return "Incorrect email or password.";
   if (c.includes("invalid-email")) return "That email address is not valid.";
+  if (c.includes("email-already-in-use")) return "That email address already has an account.";
+  if (c.includes("weak-password")) return "Choose a password of at least 6 characters.";
   if (c.includes("too-many-requests")) return "Too many attempts. Please wait a minute and try again.";
   if (c.includes("network-request-failed")) return "No internet connection. Please check your network.";
   if (c.includes("user-disabled")) return "This account has been disabled.";
+  if (c.includes("requires-recent-login")) return "Please log out and back in, then try again.";
+  if (c.includes("permission-denied")) return "This account is not allowed to open the shop data.";
   return e?.message || "Something went wrong. Please try again.";
-}
-
-export async function login(email, password) {
-  const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
-  return cred.user;
-}
-
-export async function logout() {
-  try { logActivity(null, "LOGOUT", state.user?.email || ""); } catch {}
-  stopStore();
-  await signOut(auth);
-}
-
-export async function resetPassword(email) {
-  await sendPasswordResetEmail(auth, email.trim());
 }
 
 /**
  * Load (or bootstrap) the Firestore profile for a signed-in account.
  * The very first account on a brand-new project becomes the admin;
- * after business settings exist, new accounts land as inactive staff
- * until an admin activates them.
+ * everybody else is created by the owner from the Staff screen, so an
+ * account with no profile is simply not allowed in.
  */
 export async function loadProfile(fbUser) {
-  const uRef = ref(C.users, fbUser.uid);
-  const snap = await getDoc(uRef);
+  const snap = await getDoc(userRef(fbUser.uid));
   if (snap.exists()) {
     const data = snap.data();
-    return { uid: fbUser.uid, email: fbUser.email, ...data };
+    return { ...data, uid: fbUser.uid, email: fbUser.email || data.email || "" };
   }
 
-  // No profile yet - decide whether this is the bootstrap admin.
+  // No profile yet - is this the very first account on the project?
   let isFirst = false;
   try {
-    const settings = await getDoc(ref(C.settings, "business"));
+    const settings = await getDoc(doc(db, C.settings, "business"));
     if (!settings.exists()) {
-      const anyUser = await getDocs(query(col(C.users), limit(1)));
+      const anyUser = await getDocs(query(collection(db, C.users), limit(1)));
       isFirst = anyUser.empty;
     }
-  } catch { /* rules may block the probe - treat as not first */ }
+  } catch { /* the rules may block the probe - treat as not first */ }
+
+  if (!isFirst) {
+    const e = new Error("no-profile");
+    e.code = "vyra/no-profile";
+    throw e;
+  }
 
   const profile = {
+    uid: fbUser.uid,
     name: fbUser.displayName || (fbUser.email || "").split("@")[0],
     email: fbUser.email,
-    role: isFirst ? "admin" : "staff",
-    status: isFirst ? "active" : "inactive",
+    role: "admin",
+    status: "active",
     permissions: {},
-    createdAt: serverTimestamp(),
+    createdAt: Timestamp.now(),
     updatedAt: serverTimestamp()
   };
-  await setDoc(uRef, profile);
-  return { uid: fbUser.uid, ...profile };
+  await setDoc(userRef(fbUser.uid), profile);
+  return profile;
+}
+
+/* The login form drives the session itself; the auth listener stays out
+   of the way while it does, so the store is not started twice. */
+let signingIn = false;
+
+export async function login(email, password) {
+  signingIn = true;
+  try {
+    const cred = await signInWithEmailAndPassword(auth, String(email).trim(), password);
+    const profile = await loadProfile(cred.user);
+    if ((profile.status || "active") !== "active") {
+      await signOut(auth);
+      const e = new Error("This account is not active yet. Ask the shop owner to activate it.");
+      e.code = "vyra/inactive";
+      throw e;
+    }
+    return profile;
+  } catch (e) {
+    signingIn = false;
+    if (e?.code === "vyra/no-profile") {
+      await signOut(auth).catch(() => {});
+      const x = new Error("This account has not been set up for the shop yet. Ask the owner to add you under Staff.");
+      x.code = "vyra/no-profile";
+      throw x;
+    }
+    throw e;
+  }
+}
+
+export async function logout() {
+  try { logActivity("LOGOUT", state.user?.email || ""); } catch { /* going anyway */ }
+  stopStore();
+  await signOut(auth);
+}
+
+export async function resetPassword(email) {
+  await sendPasswordResetEmail(auth, String(email).trim());
+}
+
+/** Change the signed-in account's own password. */
+export async function changePassword(currentPassword, newPassword) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("You are not signed in.");
+  const cred = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, cred);
+  await updatePassword(user, newPassword);
+}
+
+/** Everything that has to happen once a profile is in hand. */
+async function begin(profile, onReady, reason) {
+  await startStore(profile);
+  updateDoc(userRef(profile.uid), { lastLoginAt: Timestamp.now() }).catch(() => {});
+  logActivity(reason === "resumed" ? "SESSION_RESUMED" : "LOGIN", profile.email || "");
+  ensureBlocks(["invoice", "sku"]);
+  flushOutbox().catch(() => {});
+  onReady(profile);
 }
 
 /**
@@ -79,6 +141,8 @@ export async function loadProfile(fbUser) {
 export function watchAuth(onReady) {
   onAuthStateChanged(auth, async (fbUser) => {
     if (!fbUser) { stopStore(); onReady(null); return; }
+    if (signingIn) return;                 // the login form is handling this one
+
     try {
       const profile = await loadProfile(fbUser);
       if ((profile.status || "active") !== "active") {
@@ -86,14 +150,26 @@ export function watchAuth(onReady) {
         onReady(null, "inactive");
         return;
       }
-      await startStore(profile);
-      updateDoc(ref(C.users, fbUser.uid), { lastLoginAt: serverTimestamp() }).catch(() => {});
-      logActivity(null, "LOGIN", profile.email || "");
-      ensureBlocks(["invoice", "sku"]);
-      onReady(profile);
+      await begin(profile, onReady, "resumed");
     } catch (e) {
       console.error("profile load failed", e);
-      onReady(null, "error:" + (e?.message || ""));
+      if (e?.code === "vyra/no-profile") {
+        await signOut(auth).catch(() => {});
+        onReady(null, "error:This account has not been set up for the shop yet.");
+        return;
+      }
+      onReady(null, "error:" + authMessage(e));
     }
   });
 }
+
+/** Called by the login form once login() has returned a profile. */
+export async function startSession(profile, onReady) {
+  try {
+    await begin(profile, onReady, "login");
+  } finally {
+    signingIn = false;
+  }
+}
+
+export { state };
