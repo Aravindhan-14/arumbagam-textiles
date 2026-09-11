@@ -1,21 +1,46 @@
 /* ============================================================
    VYRA SAREES - printable documents
    ------------------------------------------------------------
-   Builds the thermal receipt (ESC/POS), an HTML twin used for
-   on-screen preview and browser printing, and the QR / barcode
-   sticker jobs.
+   Builds the bill, an HTML twin used for on-screen preview and
+   browser printing, and the QR / barcode sticker jobs. The same
+   layout code drives both builders: artwork for the wired
+   printer, ESC/POS bytes for a receipt printer asked to take
+   them raw.
    ============================================================ */
-import { Escpos, sendBytes, printHtmlFallback, printerMode, isConnected, paperWidth } from "./printer.js";
-import { labelCanvas, qrPayload } from "../codes/codes.js";
-import { esc, fmtDate, fmtTime, num, round2, toNum } from "../utils.js";
+import {
+  Escpos, sendBytes, printHtmlFallback, printCanvasRun,
+  usesBrowserPrint, rawReceipts, receiptPrinter, labelPrinter, labelRotation
+} from "./printer.js";
+import { PaperDoc } from "./paper.js";
+import { labelRowCanvas, labelRowWidthMm, calibrationRowCanvas } from "../codes/codes.js";
+import { esc, fmtDate, fmtTime, num, round2, toInt, toNum } from "../utils.js";
+
+export { usesBrowserPrint } from "./printer.js";
 
 const rs = (n) => "Rs." + num(n);
 
+/**
+ * Bills are drawn as artwork and printed through the Windows driver, which
+ * is the only thing a label printer such as the TVS LP 46 Lite understands.
+ * A receipt printer can be asked for raw ESC/POS instead, in Settings.
+ */
+export function newReceiptDoc(settings) {
+  const width = toNum(settings.printerWidth, 58);
+  return rawReceipts() ? new Escpos(width) : new PaperDoc(width);
+}
+
+/** Send whichever kind of document the builder produced. */
+export async function sendDoc(doc, { printer } = {}) {
+  if (doc instanceof Escpos) { await sendBytes(doc.build(), { printer: printer || receiptPrinter() }); return "printer"; }
+  await doc.print({ printer: printer || receiptPrinter() });
+  return "printer";
+}
+
 /* ============================================================
-   Receipt - ESC/POS
+   Receipt - one layout, either builder
    ============================================================ */
-export function buildReceipt(sale, settings, { copy = "" } = {}) {
-  const p = new Escpos(toNum(settings.printerWidth, 58));
+export function buildReceipt(sale, settings, { copy = "", doc } = {}) {
+  const p = doc || newReceiptDoc(settings);
   // A bill can be raised without GST even when the shop normally charges it,
   // so the bill's own flag decides what gets printed.
   const gst = sale.gstEnabled !== false && settings.gstEnabled !== false;
@@ -102,26 +127,14 @@ export function buildReceipt(sale, settings, { copy = "" } = {}) {
   return p;
 }
 
-/**
- * True when a job should go through the browser's print dialog instead of
- * raw ESC/POS bytes: the shop picked "Browser print", or there is no thermal
- * transport at all (a desk PC with a USB printer, for example).
- */
-export function usesBrowserPrint() {
-  if (printerMode() === "browser") return true;
-  return !isConnected() && printerMode() === "auto" && !navigator.bluetooth && !isAndroid();
-}
-
 export async function printSale(sale, settings, opts = {}) {
   if (usesBrowserPrint()) {
     printHtmlFallback(receiptHtml(sale, settings, opts), sale.invoiceNumber || "Receipt");
     return "browser";
   }
-  await sendBytes(buildReceipt(sale, settings, opts).build());
+  await sendDoc(buildReceipt(sale, settings, opts));
   return "printer";
 }
-
-const isAndroid = () => /android/i.test(navigator.userAgent);
 
 /* ============================================================
    Receipt - HTML twin (preview + browser printing)
@@ -190,99 +203,87 @@ export function receiptHtml(sale, settings, { copy = "" } = {}) {
    ============================================================ */
 /**
  * jobs = [{ product, qty, type:"qr"|"barcode" }]
- * Renders each sticker as a raster image so the layout survives on
- * any ESC/POS device (receipt printer or label printer).
+ *
+ * The label roll carries several stickers side by side, so the page the
+ * printer feeds is a whole *row* - the same product's sticker repeated
+ * across it. Each row therefore yields `labelsPerRow` stickers, and a run
+ * of 10 labels on a two-up roll is 5 rows. Everything is drawn as artwork,
+ * so it prints through the label printer's own Windows driver.
  */
 export async function printLabels(jobs, settings, onProgress) {
   const widthMm = toNum(settings.labelWidthMm, 50);
   const heightMm = toNum(settings.labelHeightMm, 25);
-  const browser = usesBrowserPrint();
-  if (browser) return printLabelsViaBrowser(jobs, settings, widthMm, heightMm, onProgress);
-
-  const p = new Escpos(toNum(settings.printerWidth, 58));
-  let done = 0;
+  const across = Math.max(1, toInt(settings.labelsPerRow, 1));
+  const gapMm = Math.max(0, toNum(settings.labelGapMm, 0));
+  const rowWidthMm = labelRowWidthMm({ widthMm, across, gapMm });
   const total = jobs.reduce((a, j) => a + toNum(j.qty, 1), 0);
 
-  for (const job of jobs) {
-    const canvas = await labelCanvas(job.product, {
-      widthMm: Math.min(widthMm, paperWidth() - 6),
-      heightMm,
-      type: job.type || "qr",
-      showPrice: settings.labelShowPrice !== false,
-      shopName: settings.labelShowShopName ? settings.businessName : ""
-    });
-    const copies = Math.max(1, toNum(job.qty, 1));
-    for (let i = 0; i < copies; i++) {
-      p.align("center").image(canvas).feed(1);
-      done++;
-      if (onProgress) onProgress(done, total);
-    }
-  }
-  p.feed(2);
-  if (settings.labelCut !== false) p.cut();
-  await sendBytes(p.build());
-  return total;
-}
-
-/**
- * Stickers through the print dialog - for a USB label printer (TVS LP 46 Neo
- * and friends) driven from Windows. One sticker per page at the exact label
- * size, so the driver feeds one label per print.
- */
-async function printLabelsViaBrowser(jobs, settings, widthMm, heightMm, onProgress) {
-  let done = 0;
-  const total = jobs.reduce((a, j) => a + toNum(j.qty, 1), 0);
   const pages = [];
-
+  let drawn = 0;
   for (const job of jobs) {
-    const canvas = await labelCanvas(job.product, {
-      widthMm, heightMm,
+    const canvas = await labelRowCanvas(job.product, {
+      widthMm, heightMm, across, gapMm,
+      shiftXMm: toNum(settings.labelShiftXMm, 0),
+      shiftYMm: toNum(settings.labelShiftYMm, 0),
       type: job.type || "qr",
       showPrice: settings.labelShowPrice !== false,
       shopName: settings.labelShowShopName ? settings.businessName : ""
     });
-    const src = canvas.toDataURL("image/png");
-    const copies = Math.max(1, toNum(job.qty, 1));
-    for (let i = 0; i < copies; i++) {
-      pages.push(`<div class="lbl"><img src="${src}" alt=""></div>`);
-      done++;
-      if (onProgress) onProgress(done, total);
-    }
+    // A row prints `across` stickers at once, so an odd count rounds up:
+    // the last row still comes out full.
+    const wanted = Math.max(1, toNum(job.qty, 1));
+    const rows = Math.ceil(wanted / across);
+    pages.push({ canvas, copies: rows });
+    drawn = Math.min(total, drawn + rows * across);
+    if (onProgress) onProgress(drawn, total);
   }
 
-  printHtmlFallback(pages.join(""), "Labels", {
-    page: `${widthMm}mm ${heightMm}mm`,
-    margin: "0",
-    css: `.lbl{width:${widthMm}mm;height:${heightMm}mm;overflow:hidden;page-break-after:always;break-after:page}
-          .lbl:last-child{page-break-after:auto;break-after:auto}
-          .lbl img{width:100%;height:100%;max-width:none;object-fit:contain;display:block}`
+  await printCanvasRun(pages, {
+    widthMm: rowWidthMm,
+    heightMm,
+    rotate: labelRotation(),
+    printer: labelPrinter(),
+    title: "VYRA SAREES labels"
   });
   return total;
 }
 
+/**
+ * Print one measuring row: the same path, the same size, but carrying a
+ * ruler instead of a product. Held against a tape it says straight away
+ * whether the printer is putting the row out at its true size.
+ */
+export async function printCalibration(settings) {
+  const widthMm = toNum(settings.labelWidthMm, 50);
+  const heightMm = toNum(settings.labelHeightMm, 25);
+  const across = Math.max(1, toInt(settings.labelsPerRow, 1));
+  const gapMm = Math.max(0, toNum(settings.labelGapMm, 0));
+  const canvas = calibrationRowCanvas({
+    widthMm, heightMm, across, gapMm,
+    shiftXMm: toNum(settings.labelShiftXMm, 0),
+    shiftYMm: toNum(settings.labelShiftYMm, 0)
+  });
+
+  await printCanvasRun([{ canvas, copies: 1 }], {
+    widthMm: labelRowWidthMm({ widthMm, across, gapMm }),
+    heightMm,
+    rotate: labelRotation(),
+    printer: labelPrinter(),
+    title: "VYRA SAREES size test"
+  });
+  return { widthMm, heightMm, across, rowMm: labelRowWidthMm({ widthMm, across, gapMm }) };
+}
+
 /** Print one 58/80mm-wide QR block for a single product (receipt printer style). */
 export async function printProductQr(product, settings, copies = 1, type = "qr") {
-  // No thermal transport? Print it as a normal sticker through the dialog.
-  if (usesBrowserPrint()) { await printLabels([{ product, qty: copies, type }], settings); return; }
-
-  const p = new Escpos(toNum(settings.printerWidth, 58));
-  for (let i = 0; i < copies; i++) {
-    p.align("center").bold(true).line(trim(product.productName || "", p.cols)).bold(false);
-    if (product.colour || product.size) p.line([product.colour, product.size].filter(Boolean).join(" · "));
-    if (type === "barcode") p.barcode128(qrPayload(product), 60, true);
-    else p.qr(qrPayload(product), 7).feed(1).line(product.sku || "");
-    p.bold(true).line("Rs." + Math.round(toNum(product.sellingPrice))).bold(false);
-    p.feed(2);
-  }
-  p.align("left").cut();
-  await sendBytes(p.build());
+  await printLabels([{ product, qty: copies, type }], settings);
 }
 
 /* ============================================================
    Small receipts: payment / return acknowledgement
    ============================================================ */
 export async function printReturnSlip(ret, settings) {
-  const p = new Escpos(toNum(settings.printerWidth, 58));
+  const p = newReceiptDoc(settings);
   p.align("center").bold(true).size(2, 1).line(settings.businessName || "VYRA SAREES").size(1, 1)
     .line(ret.type === "EXCHANGE" ? "EXCHANGE SLIP" : "RETURN SLIP").bold(false).align("left").rule();
   p.lr("No:", ret.returnNumber || "-");
@@ -302,7 +303,7 @@ export async function printReturnSlip(ret, settings) {
   if (toNum(ret.refundAmount) > 0) p.bold(true).lr(ret.mode === "credit" ? "Credit note" : "Refund", rs(ret.refundAmount)).bold(false);
   if (ret.reason) p.line("Reason: " + ret.reason);
   p.rule().align("center").line("Thank You").feed(1).align("left").cut();
-  await sendBytes(p.build());
+  await sendDoc(p);
 }
 
 /* ---------- text helpers ---------- */

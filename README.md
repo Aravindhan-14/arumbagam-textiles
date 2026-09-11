@@ -1,8 +1,8 @@
 # VYRA SAREES — Boutique Billing, Inventory & Sales Management
 
 A mobile-first web application for the day-to-day running of a saree and boutique shop:
-products, stock, QR/barcode labels, billing on the phone, Bluetooth thermal printing,
-purchases, customers, suppliers, returns, GST and reports.
+products, stock, QR/barcode labels, billing on the phone, wired USB printing of bills
+and stickers, purchases, customers, suppliers, returns, GST and reports.
 
 **Stack:** plain HTML / CSS / JavaScript (ES modules, no build step) talking straight to
 **Firebase** — Firestore for the data, Firebase Auth for the logins, Cloud Storage for
@@ -10,8 +10,9 @@ the photos. There is no server of our own to run and no database to install. The
 Firestore SDK keeps a copy of everything on the device, so the counter keeps billing
 when the Wi-Fi drops and syncs when it returns.
 
-**Primary device:** Android phone in Chrome, with a Bluetooth 2D scanner (HID mode)
-and a Bluetooth ESC/POS thermal printer.
+**Primary device:** the shop PC in Chrome for printing, plus any phone on the shop
+Wi-Fi for billing. The printers (a TVS LP 46 Lite label printer, an ESC/POS receipt
+printer, or both) plug into the PC by USB; the scanner is an HID keyboard-wedge.
 
 ---
 
@@ -58,14 +59,14 @@ Full step-by-step instructions are in **[SETUP.md](SETUP.md)**.
 | Products, SKU, images, QR, barcode | `public/js/pages/products.js`, `pages/_shared.js`, `codes/codes.js` |
 | Scanning (HID scanner + camera) | `public/js/hw/scanner.js`, `pages/scan.js` |
 | Billing / POS, GST, payments | `public/js/pages/billing.js`, `computeBill()` in `js/utils.js` |
-| Thermal printing (receipts, labels) | `public/js/hw/printer.js`, `hw/documents.js` |
+| Printing (bills, labels) | `public/js/hw/printer.js`, `hw/paper.js`, `hw/documents.js`, `tools/print.ps1` |
 | Inventory, adjustments, history | `public/js/pages/inventory.js` |
 | Purchases, suppliers, customers | `public/js/pages/purchases.js`, `suppliers.js`, `customers.js` |
 | Returns & exchanges | `public/js/pages/returns.js` |
 | Sales history, reprint, cancel | `public/js/pages/sales.js` |
 | Reports (sales, GST, profit, stock) | `public/js/pages/reports.js` |
 | Audit log | `public/js/pages/activity.js` |
-| Local http address for the shop PC | `tools/serve.js` |
+| Local http address + print bridge | `tools/serve.js`, `tools/print.ps1` |
 
 ---
 
@@ -145,23 +146,46 @@ GST has two switches: **Settings → GST → Charge GST on bills** for the shop,
 was raised with, so a reprint months later prints exactly what the customer got.
 
 ### Printing
-`public/js/hw/printer.js` speaks ESC/POS over Web Bluetooth (Chrome on Android). Three
-transports are selectable in the Hardware panel:
+The printers are wired to the shop PC by USB, so the browser cannot reach them on its
+own. `tools/serve.js` carries a small **print bridge** (`/api/print/*`) that hands jobs
+to the Windows spooler through `tools/print.ps1`. Because the bridge lives in the same
+server that serves the app, a phone on the shop Wi-Fi prints on the shop's printer too.
 
-1. **Web Bluetooth** — direct to the printer's serial GATT characteristic.
-2. **RawBT** — hands raw ESC/POS bytes to the RawBT Android app, for browsers without
-   Web Bluetooth.
-3. **Browser print** — renders the receipt as HTML and calls `window.print()`.
+Modes, in the Printer panel:
 
-Receipts print as ESC/POS text. QR/barcode **stickers** render to a canvas at printer
-resolution and print as a raster image, so the layout survives on both receipt printers
-and dedicated label printers.
+1. **Wired printer** (default) — the page is drawn as artwork at print resolution and
+   printed through the printer's own Windows driver, at an exact page size in
+   millimetres. No dialog and no pop-up, and it works on any printer Windows can
+   already print to — including a label printer such as the **TVS LP 46 Lite**, which
+   does not understand ESC/POS at all.
+2. **Raw ESC/POS** — a tick box for receipt printers that prefer the bytes untouched;
+   they go straight down the wire with no driver in the way.
+3. **Browser print** — for when the app is opened away from the shop PC (the hosted
+   address, a phone, a shared port). Labels are laid into the page itself at the exact
+   row size and `window.print()` is called: no pop-up window to be blocked, and no
+   `about:blank` in the header. The print box still has to be set to the label paper
+   with no margins, no scaling and headers off - the app shows that list first.
 
-> The rupee sign is not in the ESC/POS character set, so printed receipts show `Rs.`
+Bills and stickers share one layout. `hw/documents.js` writes the receipt once against
+a builder interface, and either builder can carry it: `Escpos` in `hw/printer.js` emits
+ESC/POS bytes, `PaperDoc` in `hw/paper.js` paints the same document onto a canvas at
+203 dpi for the driver.
+
+QR/barcode **stickers** are always artwork. The roll carries several stickers side by
+side, so the page the printer feeds is a whole **row** - the same product's sticker
+repeated across it (`labelRowCanvas()` in `codes/codes.js`). With the shop's two-up
+roll, a run of ten labels is five rows of two. **Labels across the roll** and the gap
+between them are in Settings > Printing; **Turn labels on the roll** rotates the
+artwork 90/180/270° for a roll that feeds the other way.
+
+Bills and labels can go to **different printers** — stickers to the label printer,
+bills to the receipt printer — chosen in the Printer panel.
+
+> The rupee sign is not in the ESC/POS character set, so printed bills show `Rs.`
 > The on-screen UI uses `₹` throughout.
 
 ### Scanner
-A Bluetooth scanner paired in **HID / keyboard** mode types the code and sends Enter.
+A scanner in **HID / keyboard** mode - USB or wireless - types the code and sends Enter.
 `public/js/hw/scanner.js` watches keystroke *timing* to tell a scan from human typing, so
 codes are captured no matter which field has focus. Pages register a handler with
 `setScanHandler()`; anything unhandled opens the Scan screen with the code. A camera
@@ -234,14 +258,18 @@ balances and leaves an audit record.
 
 | Item | Requirement |
 |---|---|
-| Phone | Android, Chrome 90+ (Web Bluetooth needs Chrome; iOS Safari falls back to RawBT/browser print) |
-| Scanner | Bluetooth 2D (1D + 2D + QR), **HID / Keyboard mode** |
-| Printer | Bluetooth ESC/POS, 58 mm or 80 mm |
-| Labels | Optional thermal label printer for adhesive stickers |
+| Billing PC | Windows 10 or later, Node.js, Chrome. The printers plug in here. |
+| Phone | Any phone on the shop Wi-Fi, Chrome or Safari — it prints through the PC |
+| Scanner | 2D (1D + 2D + QR) in **HID / Keyboard mode**, USB or wireless |
+| Label printer | USB, with its Windows driver installed — e.g. TVS LP 46 Lite |
+| Receipt printer | USB ESC/POS, 58 mm or 80 mm (optional) |
 
-Pair both devices in Android's Bluetooth settings first. The scanner then works
-immediately. For the printer, open the Hardware panel in the app and tap **Connect** —
-Chrome shows its own device picker (this is required and cannot be skipped).
+Plug each printer in, install the driver that came with it, and print a Windows test
+page once so Windows is happy. Then open the app on that PC, tap the printer icon in
+the top bar, tap **Find printers**, and choose which printer takes the bills and which
+takes the labels. **Test print** proves the whole path.
+
+Nothing needs pairing, and no printer needs Bluetooth — the TVS LP 46 Lite has none.
 
 ---
 
@@ -255,7 +283,8 @@ firestore.indexes.json      composite indexes the reports need
 storage.rules               product photos and the shop logo
 
 tools/
-  serve.js                  dependency-free static server for the shop PC
+  serve.js                  dependency-free static server + the print bridge
+  print.ps1                 hands print jobs to the Windows spooler
 
 public/
   index.html                app shell, login screen, boot guard
@@ -271,7 +300,8 @@ public/
     utils.js                money, dates, SKU/barcode, computeBill()
     codes/codes.js          QR + barcode + sticker canvas rendering
     hw/scanner.js           HID keyboard-wedge capture
-    hw/printer.js           ESC/POS builder + Web Bluetooth / RawBT / browser
+    hw/printer.js           wired transport (print bridge) + ESC/POS builder
+    hw/paper.js             the same documents painted as artwork for the driver
     hw/documents.js         receipts, label jobs, return slips
     pages/*.js              one module per screen, lazy-loaded by the router
 ```

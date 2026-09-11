@@ -6,9 +6,11 @@ import { state, on, can, isAdmin } from "./store.js";
 import { icon, toast, ok, err, warn, openSheet, confirmDialog, busy, closeTopSheet, sheetsOpen } from "./ui.js";
 import { onScan, scannerStatus, emitScan } from "./hw/scanner.js";
 import {
-  connectPrinter, disconnectPrinter, isConnected, printerName, printerStatus,
-  setPrinterMode, printerMode, setPaperWidth, supportsWebBluetooth, Escpos
+  detectPrinters, printers, printerStatus, setPrinterMode, printerMode, setPaperWidth,
+  receiptPrinter, labelPrinter, setReceiptPrinter, setLabelPrinter,
+  rawReceipts, setRawReceipts, bridgeReady
 } from "./hw/printer.js";
+import { newReceiptDoc, sendDoc } from "./hw/documents.js";
 import { esc, toNum } from "./utils.js";
 import { peekBlockSize, pendingBills, flushOutbox } from "./db.js";
 
@@ -152,38 +154,52 @@ function closeDrawer() { drawerEl().classList.remove("open"); document.getElemen
 /* ============================================================
    Hardware panel
    ============================================================ */
+function printerOptions(selected) {
+  const list = printers();
+  if (!list.length) return `<option value="">No printer found</option>`;
+  return list.map((p) => `<option value="${esc(p.name)}" ${p.name === selected ? "selected" : ""}>
+      ${esc(p.name)}${p.default ? " (default)" : ""}${p.offline ? " · offline" : ""}</option>`).join("");
+}
+
 function hardwareSheet() {
   const render = (api) => {
     const pr = printerStatus();
     const sc = scannerStatus();
+    const wired = bridgeReady();
     api.setBody(`
       <div class="card">
-        <div class="card-head"><h3>${icon("print")} Thermal Printer</h3>
+        <div class="card-head"><h3>${icon("print")} Printer (USB)</h3>
           <span class="pill ${pr.ok ? "ok" : "warn"}">${pr.ok ? "Ready" : "Offline"}</span></div>
         <p class="small muted mb">${esc(pr.text)}</p>
         <label class="field"><span>Print mode</span>
           <select id="hw-mode">
             <option value="auto">Automatic</option>
-            <option value="bluetooth">Web Bluetooth (Chrome Android)</option>
-            <option value="rawbt">RawBT app (Android)</option>
+            <option value="wired">Wired printer (no dialog)</option>
             <option value="browser">Browser print / PDF</option>
           </select></label>
-        <label class="field"><span>Paper width</span>
-          <select id="hw-width"><option value="58">58 mm</option><option value="80">80 mm</option></select></label>
+        <label class="field"><span>Bills print on</span>
+          <select id="hw-receipt" ${wired ? "" : "disabled"}>${printerOptions(receiptPrinter())}</select></label>
+        <label class="field"><span>Labels print on</span>
+          <select id="hw-label" ${wired ? "" : "disabled"}>${printerOptions(labelPrinter())}</select></label>
+        <label class="field"><span>Bill paper width</span>
+          <select id="hw-width">
+            <option value="58">58 mm</option><option value="80">80 mm</option>
+            <option value="100">100 mm (4 inch roll)</option>
+          </select></label>
+        <label class="check"><input type="checkbox" id="hw-raw" ${rawReceipts() ? "checked" : ""}>
+          <span>Send bills as raw ESC/POS (receipt printers only)</span></label>
         <div class="btn-row">
-          <button class="btn btn-primary" id="hw-connect" ${supportsWebBluetooth() ? "" : "disabled"}>
-            ${icon("bt")} ${isConnected() ? "Reconnect" : "Connect"}</button>
+          <button class="btn btn-primary" id="hw-connect">${icon("print")} Find printers</button>
           <button class="btn btn-soft" id="hw-test">Test print</button>
         </div>
-        ${isConnected() ? `<button class="btn btn-ghost btn-block mt" id="hw-disc">Disconnect ${esc(printerName())}</button>` : ""}
-        ${supportsWebBluetooth() ? "" : `<p class="form-note mt">This browser has no Web Bluetooth. Install <b>RawBT</b> from the Play Store and choose the RawBT mode above.</p>`}
+        ${wired ? "" : `<p class="form-note mt">Wired printing needs the app opened on the billing PC, from the window that <b>START VYRA SAREES</b> starts. Plug the printer in by USB, install its Windows driver, then tap <b>Find printers</b>.</p>`}
       </div>
 
       <div class="card">
         <div class="card-head"><h3>${icon("scan")} Barcode Scanner</h3>
           <span class="pill ${sc.ok ? "ok" : "mut"}">${sc.ok ? "Active" : "Waiting"}</span></div>
         <p class="small muted mb">${esc(sc.text)}</p>
-        <p class="small muted">Pair the Bluetooth 2D scanner with the phone in <b>HID / Keyboard</b> mode. Scanned codes are then read anywhere in the app.</p>
+        <p class="small muted">A USB scanner works as soon as it is plugged in. A wireless one should be paired in <b>HID / Keyboard</b> mode. Scanned codes are read anywhere in the app.</p>
         <div class="btn-row mt">
           <button class="btn btn-soft" id="hw-testscan">Simulate a scan</button>
         </div>
@@ -201,25 +217,33 @@ function hardwareSheet() {
 
     api.root.querySelector("#hw-mode").value = printerMode();
     api.root.querySelector("#hw-width").value = String(toNum(state.settings?.printerWidth, 58));
-    api.root.querySelector("#hw-mode").onchange = (e) => { setPrinterMode(e.target.value); ok("Print mode saved"); };
+    api.root.querySelector("#hw-mode").onchange = (e) => { setPrinterMode(e.target.value); ok("Print mode saved"); render(api); };
     api.root.querySelector("#hw-width").onchange = (e) => { setPaperWidth(e.target.value); ok("Paper width set to " + e.target.value + "mm"); };
+    api.root.querySelector("#hw-receipt").onchange = (e) => { setReceiptPrinter(e.target.value); ok("Bills will print on " + e.target.value); };
+    api.root.querySelector("#hw-label").onchange = (e) => { setLabelPrinter(e.target.value); ok("Labels will print on " + e.target.value); };
+    api.root.querySelector("#hw-raw").onchange = (e) => { setRawReceipts(e.target.checked); ok("Saved"); };
     api.root.querySelector("#hw-connect").onclick = async () => {
-      try { busy(true, "Connecting…"); const n = await connectPrinter(); ok("Connected to " + n); render(api); }
-      catch (e) { err(e.message); } finally { busy(false); }
+      try {
+        busy(true, "Looking for printers…");
+        const b = await detectPrinters({ force: true });
+        if (b.ok) ok(`${b.printers.length} printer${b.printers.length === 1 ? "" : "s"} found`);
+        else warn(b.error);
+        render(api);
+      } catch (e) { err(e.message); } finally { busy(false); }
     };
     api.root.querySelector("#hw-test").onclick = async () => {
       try {
-        const p = new Escpos(toNum(state.settings?.printerWidth, 58));
+        busy(true, "Printing…");
+        const p = newReceiptDoc(state.settings || {});
         p.align("center").bold(true).size(2, 2).line("VYRA SAREES").size(1, 1).bold(false)
           .line("Printer test").rule().align("left")
           .lr("Paper", (state.settings?.printerWidth || 58) + "mm")
           .lr("Mode", printerMode())
+          .lr("Printer", receiptPrinter() || "-")
           .rule().align("center").qr("VYRA-SAREES-TEST", 6).feed(1).line("Test successful").cut();
-        await p.print(); ok("Test sent to printer");
-      } catch (e) { err(e.message); }
+        await sendDoc(p); ok("Test sent to printer");
+      } catch (e) { err(e.message); } finally { busy(false); }
     };
-    const disc = api.root.querySelector("#hw-disc");
-    if (disc) disc.onclick = () => { disconnectPrinter(); toast("Printer disconnected"); render(api); };
     const flush = api.root.querySelector("#hw-flush");
     if (flush) flush.onclick = async () => {
       try {
@@ -303,6 +327,7 @@ function showApp(user) {
   document.getElementById("drawer-role").textContent = user.role === "admin" ? "Administrator" : "Staff";
   buildNav();
   setPaperWidth(toNum(state.settings?.printerWidth, 58));
+  detectPrinters();
   if (!location.hash || location.hash === "#") location.hash = "#/dashboard";
   route();
 }

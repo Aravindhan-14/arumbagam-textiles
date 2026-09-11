@@ -148,8 +148,12 @@ export const DEFAULT_SETTINGS = {
   lowStockDefault: 3,
   printerWidth: 58,              // 58 | 80
   footerMessage: "Thank You for Shopping with VYRA SAREES\nVisit Again",
-  labelWidthMm: 50,
-  labelHeightMm: 25
+  labelWidthMm: 50,             // one sticker, as measured off the roll
+  labelHeightMm: 25,
+  labelsPerRow: 2,              // stickers side by side across the roll
+  labelGapMm: 0,                // the gap between them
+  labelShiftXMm: 0,             // nudge the printing across the roll
+  labelShiftYMm: 0              // ... and along it
 };
 
 const BUSINESS_DOC = () => ref(C.settings, "business");

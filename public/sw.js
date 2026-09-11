@@ -6,7 +6,7 @@
    never touched here - the Firestore SDK has its own on-device
    cache and replays writes made while offline.
    ============================================================ */
-const VERSION = "vyra-v5-firebase";
+const VERSION = "vyra-v6-wired-print";
 const SHELL = [
   "./",
   "./index.html",
@@ -22,6 +22,7 @@ const SHELL = [
   "./js/utils.js",
   "./js/codes/codes.js",
   "./js/hw/printer.js",
+  "./js/hw/paper.js",
   "./js/hw/camera.js",
   "./js/hw/scanner.js",
   "./js/hw/documents.js",
@@ -66,6 +67,9 @@ self.addEventListener("fetch", (e) => {
 
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
+
+  // The print bridge talks to the shop's printers: never serve it from cache.
+  if (sameOrigin && url.pathname.startsWith("/api/")) return;
 
   // Firebase looks after its own traffic: auth, Firestore's socket and the
   // image bucket must never be answered from this cache.

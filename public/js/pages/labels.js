@@ -5,8 +5,8 @@ import { state, searchProducts, findByCode, can } from "../store.js";
 import { icon, openSheet, emptyState, ok, err, warn, busy, confirmDialog, toast } from "../ui.js";
 import { esc, fileUrl, money, toNum, toInt, debounce, sum } from "../utils.js";
 import { labelPreviewHtml, hydrateCodeSlots, labelCanvas, qrPayload } from "../codes/codes.js";
-import { printLabels } from "../hw/documents.js";
-import { printHtmlFallback, paperWidth } from "../hw/printer.js";
+import { printLabels, usesBrowserPrint } from "../hw/documents.js";
+import { labelPrinter } from "../hw/printer.js";
 import { setScanHandler } from "../app.js";
 
 export const title = "QR / Barcode Labels";
@@ -128,18 +128,50 @@ export async function mount(view, { go }) {
     if (!await confirmDialog(`Print ${n} label${n > 1 ? "s" : ""}? Make sure the printer has label stock loaded.`, { okText: "Print" })) return;
     const jobs = [...picked.entries()].map(([id, qty]) => ({ product: state.products.find((p) => p.id === id), qty, type }))
       .filter((j) => j.product);
+    const progress = (done, tot) => {
+      const el = document.getElementById("busy-text");
+      if (el) el.textContent = `Printing ${done}/${tot}…`;
+    };
+    // Without the shop PC's helper the job goes through the browser's own
+    // print box, and its paper settings decide how the roll comes out - so
+    // show the three settings that matter before it opens.
+    if (usesBrowserPrint() && !await printBoxReminder()) return;
+
     try {
       busy(true, `Printing 0/${n}…`);
-      await printLabels(jobs, state.settings || {}, (done, tot) => {
-        document.getElementById("busy-text").textContent = `Printing ${done}/${tot}…`;
-      });
-      ok(`${n} labels sent to printer`);
+      await printLabels(jobs, state.settings || {}, progress);
+      ok(usesBrowserPrint()
+        ? `${n} labels ready in the print box`
+        : `${n} labels sent to ${labelPrinter() || "the label printer"}`);
     } catch (e) {
       err(e.message);
     } finally { busy(false); }
   };
 
   return () => {};
+}
+
+/**
+ * The print box's own paper wins over the label size, so these three
+ * settings are the difference between a straight sticker and a turned one.
+ * Chrome remembers them per printer after the first time.
+ */
+async function printBoxReminder() {
+  if (sessionStorage.getItem("vyra.printBoxSeen") === "1") return true;
+  const go = await confirmDialog(
+    [
+      "The print box will open. Set these once - the browser remembers them:",
+      "",
+      "1. Printer — the label printer",
+      "2. Paper size — the label stock (one printed row)",
+      "3. Margins — None,  Scale — 100 (Default)",
+      "4. Untick Headers and footers",
+      "",
+      "Without them the stickers come out turned or shrunk."
+    ].join("\n"),
+    { okText: "Open the print box" });
+  if (go) sessionStorage.setItem("vyra.printBoxSeen", "1");
+  return go;
 }
 
 /* ---------- preview / paper fallback ---------- */

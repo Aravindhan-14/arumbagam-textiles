@@ -42,20 +42,19 @@ if errorlevel 1 (
 
 call :isup %PORT%
 if errorlevel 1 (
-  echo   Starting VYRA SAREES ...
-  start "VYRA SAREES" /d "%APPDIR%" cmd /k node "tools\serve.js" %PORT%
-  call :waitport %PORT% 20
-  if errorlevel 1 (
-     echo.
-     echo   It did not start. Look at the window titled "VYRA SAREES"
-     echo   for the reason.
-     echo.
-     pause
-     exit /b 1
-  )
-  echo   Started.
+  call :start
 ) else (
-  echo   Already running.
+  REM Something is already on the port. An older copy has no printer bridge,
+  REM and printing would quietly fall back to the browser - which puts labels
+  REM on the roll sideways. So replace it.
+  call :hasprint %PORT%
+  if errorlevel 1 (
+    echo   An older VYRA SAREES is running. Restarting it ...
+    call :stopport %PORT%
+    call :start
+  ) else (
+    echo   Already running.
+  )
 )
 
 echo.
@@ -63,10 +62,41 @@ echo   Opening %URL%
 start "" "%URL%"
 echo.
 echo   Ready. Keep the "VYRA SAREES" window open while billing.
+echo   Bills and labels print on the USB printer through this window,
+echo   so leave it open - phones on the shop Wi-Fi print through it too.
 echo   The first time on a new phone, connect to the internet once
 echo   so it can sign in; after that it keeps working offline.
 echo.
 ping -n 4 127.0.0.1 >nul
+exit /b 0
+
+REM ---------- helper: start the server ----------
+:start
+echo   Starting VYRA SAREES ...
+start "VYRA SAREES" /d "%APPDIR%" cmd /k node "tools\serve.js" %PORT%
+call :waitport %PORT% 20
+if errorlevel 1 (
+   echo.
+   echo   It did not start. Look at the window titled "VYRA SAREES"
+   echo   for the reason.
+   echo.
+   pause
+   exit /b 1
+)
+echo   Started.
+exit /b 0
+
+REM ---------- helper: does the running server have the printer bridge ----------
+:hasprint
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 8 'http://localhost:%~1/api/health'; if ($r.Content -like '*vyra-sarees*') { exit 0 } else { exit 1 } } catch { exit 1 }"
+exit /b %errorlevel%
+
+REM ---------- helper: stop whatever is listening on this port ----------
+:stopport
+for /f "tokens=5" %%P in ('netstat -ano -p tcp ^| findstr /r /c:":%~1 .*LISTENING"') do (
+  taskkill /pid %%P /t /f >nul 2>&1
+)
+ping -n 3 127.0.0.1 >nul
 exit /b 0
 
 REM ---------- helper: is something listening on this port ----------

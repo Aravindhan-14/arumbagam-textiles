@@ -101,7 +101,62 @@ node tools/serve.js
 
 ---
 
-## 6. Or put it online (recommended)
+## 6. Connect the printer
+
+The printers plug into the billing PC by **USB** - nothing here needs
+Bluetooth, and the TVS LP 46 Lite has none.
+
+1. Plug the printer in and install the driver that came with it (or the one
+   from the maker's site). Print a **Windows test page** once, from
+   Settings > Printers & scanners, so Windows is happy with it.
+2. Load the label roll and set the **row size** in the driver's preferences:
+   for a two-up roll of 50 x 25 mm stickers that is **100 x 25 mm** - the
+   printer feeds one whole row at a time, not one sticker. Setting it to one
+   sticker is what squeezes both labels into one, at half size.
+3. Open the app **on that PC** with `START VYRA SAREES.bat`.
+4. Tap the printer icon in the top bar > **Find printers**, then choose
+   which printer takes the **bills** and which takes the **labels**. They can
+   be the same printer or two different ones.
+5. Tap **Test print**.
+
+Then, in **Settings > Printing**, set the size of **one** sticker (50 x 30 mm),
+**Labels across the roll** (2 for the shop's roll) and the gap between them.
+One printed row is then two stickers of the same product, so ten labels come
+out as five rows. If the stickers come out sideways, set **Turn labels on the
+roll** to 90°. Bill width is separate: 58 mm, 80 mm, or 100 mm for a 4 inch roll.
+
+**Test label row** prints one row of real stickers, and **Print size test**
+prints the same row carrying a ruler: hold a tape against it and it says
+straight away whether the printer is putting the row out at its true size.
+
+### Printing without the black window
+
+The wired path needs the app opened from the shop PC's own address. When it
+is opened from anywhere else - the hosted address, a phone, a shared port -
+printing falls back to the **browser's own print box**, and the labels are
+laid into the page at the exact row size. Nothing else is needed, but the
+print box has to be set once (the browser then remembers it per printer):
+
+* **Printer** - the label printer
+* **Paper size** - the label stock, i.e. one printed row
+* **Margins** - None, **Scale** - 100 (Default)
+* **Headers and footers** - unticked (otherwise `about:blank` and the date
+  print on the sticker, and the artwork is shrunk to make room)
+
+The app shows this list before it opens the print box.
+
+Bills go out as artwork through the printer's own Windows driver, which is
+what lets one printer handle both the bill and the barcode stickers. If the
+bills are going to an ESC/POS receipt printer and you would rather send it
+the raw bytes, tick **Send bills as raw ESC/POS** in the printer panel.
+
+Phones on the shop Wi-Fi print on the shop's printer too, as long as they
+open the `http://<the PC's IP>:5000` address that the black window prints -
+the print jobs travel through the PC.
+
+---
+
+## 7. Or put it online (recommended)
 
 Firebase Hosting gives the shop a proper address that works from anywhere —
 home, a second shop, a phone on mobile data — with no PC left running:
@@ -113,9 +168,14 @@ firebase deploy --only hosting
 The app is then at `https://vyra-sarees.web.app`. Add it to the phone's home
 screen and it behaves like an installed app.
 
+One thing to know: the hosted address has no wired printing, because the
+print bridge runs on the shop PC. Opened from the hosted address, printing
+falls back to the browser's print dialog. For silent printing, open the app
+from the PC's own `http://localhost:5000` address.
+
 ---
 
-## 7. Day-to-day
+## 8. Day-to-day
 
 | | |
 |---|---|
@@ -126,7 +186,7 @@ screen and it behaves like an installed app.
 
 ---
 
-## 8. If something is wrong
+## 9. If something is wrong
 
 | Symptom | Cause |
 |---|---|
@@ -135,3 +195,11 @@ screen and it behaves like an installed app.
 | Login works but the app says the account is not set up | That Auth user has no profile. Add them from **Staff**, or, if this is the very first account, save Settings while logged in as them. |
 | Photos do not upload | Cloud Storage is not enabled — see step 2. Everything else still works. |
 | A report says an index is needed | Run the deploy in step 3, or click the link in the browser console. |
+| Printing opens a dialog instead of just printing | The app was opened from the hosted address, or from another device. Open it on the billing PC. |
+| "No wired printer found" | The black window is not running, or the app was opened from a different address than the one it prints. Start it with `START VYRA SAREES.bat`, then tap **Find printers**. |
+| "The VYRA SAREES window is an older version" | A black window from before this update is still running. Close it and double-click `START VYRA SAREES.bat` again - it now replaces an old one by itself. Then reload the page with **Ctrl+Shift+R**. |
+| Labels come out sideways with `about:blank` printed on them | The print box's paper settings are wrong. Set Paper size to the label stock, Margins to None, Scale to 100, and untick Headers and footers. |
+| Labels print at the wrong size | The driver's paper size must be the **row** (102 x 30 mm for a two-up roll of 50 x 30 stickers), while **Settings > Printing** holds one sticker's size plus how many are across. |
+| Stickers come out sideways | Set **Turn labels on the roll** to 90° in Settings > Printing, and check the driver's preferences are set to portrait. |
+| Only one sticker of each pair prints | **Labels across the roll** is still 1. Set it to 2. |
+| The bill prints as gibberish | A label printer was sent raw ESC/POS. Untick **Send bills as raw ESC/POS** in the printer panel. |

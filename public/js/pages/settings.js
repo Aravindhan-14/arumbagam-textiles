@@ -6,8 +6,11 @@ import { saveSettings, uploadImage, DEFAULT_SETTINGS, peekBlockSize, ensureBlock
 import { changePassword } from "../auth.js";
 import { icon, openSheet, emptyState, ok, err, warn, busy, confirmDialog, formData, toast } from "../ui.js";
 import { esc, fileUrl, toNum, toInt, validGstin, upper } from "../utils.js";
-import { setPaperWidth, printerMode, setPrinterMode, printerStatus, Escpos, printHtmlFallback } from "../hw/printer.js";
-import { usesBrowserPrint } from "../hw/documents.js";
+import {
+  setPaperWidth, printerMode, setPrinterMode, printerStatus, printHtmlFallback,
+  labelRotation, setLabelRotation, labelPrinter
+} from "../hw/printer.js";
+import { usesBrowserPrint, newReceiptDoc, sendDoc, printLabels, printCalibration } from "../hw/documents.js";
 
 export const title = "Settings";
 
@@ -120,32 +123,61 @@ export async function mount(view, { go }) {
     <div class="sec-title">Printing</div>
     <div class="card">
       <div class="grid2">
-        <label class="field"><span>Receipt paper width</span>
+        <label class="field"><span>Bill paper width</span>
           <select name="printerWidth" ${editable ? "" : "disabled"}>
             <option value="58" ${toNum(s.printerWidth) === 58 ? "selected" : ""}>58 mm</option>
             <option value="80" ${toNum(s.printerWidth) === 80 ? "selected" : ""}>80 mm</option>
+            <option value="100" ${toNum(s.printerWidth) === 100 ? "selected" : ""}>100 mm (4 inch roll)</option>
           </select></label>
         <label class="field"><span>Print mode</span>
           <select id="se-printmode">
             <option value="auto">Automatic</option>
-            <option value="bluetooth">Web Bluetooth</option>
-            <option value="rawbt">RawBT app</option>
+            <option value="wired">Wired printer (no dialog)</option>
             <option value="browser">Browser print</option>
           </select></label>
       </div>
       ${editable ? `
       <div class="grid2">
-        <label class="field"><span>Label width (mm)</span>
-          <input name="labelWidthMm" type="number" inputmode="numeric" min="20" max="80" value="${toNum(s.labelWidthMm)}"></label>
-        <label class="field"><span>Label height (mm)</span>
-          <input name="labelHeightMm" type="number" inputmode="numeric" min="10" max="80" value="${toNum(s.labelHeightMm)}"></label>
+        <label class="field"><span>One label width (mm)</span>
+          <input name="labelWidthMm" type="number" inputmode="numeric" min="20" max="120" value="${toNum(s.labelWidthMm)}"></label>
+        <label class="field"><span>One label height (mm)</span>
+          <input name="labelHeightMm" type="number" inputmode="numeric" min="10" max="120" value="${toNum(s.labelHeightMm)}"></label>
       </div>
+      <div class="grid2">
+        <label class="field"><span>Labels across the roll</span>
+          <select name="labelsPerRow">
+            ${[1, 2, 3, 4].map((n) => `<option value="${n}" ${toInt(s.labelsPerRow, 1) === n ? "selected" : ""}>${n} per row</option>`).join("")}
+          </select></label>
+        <label class="field"><span>Gap between them (mm)</span>
+          <input name="labelGapMm" type="number" inputmode="numeric" min="0" max="20" step="0.5" value="${toNum(s.labelGapMm)}"></label>
+      </div>
+      <div class="grid2">
+        <label class="field"><span>Move printing across (mm)</span>
+          <input name="labelShiftXMm" type="number" inputmode="decimal" min="-40" max="40" step="0.5" value="${toNum(s.labelShiftXMm)}"></label>
+        <label class="field"><span>Move printing down (mm)</span>
+          <input name="labelShiftYMm" type="number" inputmode="decimal" min="-20" max="20" step="0.5" value="${toNum(s.labelShiftYMm)}"></label>
+      </div>
+      <p class="form-note">If the printing sits to one side of the stickers rather than in the
+        middle of them, measure how far out it is and put that here - <b>minus</b> to move it
+        left or up, <b>plus</b> to move it right or down. Print the size test, adjust, print again.</p>
+      <p class="form-note">The roll carries <b>${toInt(s.labelsPerRow, 1)} labels side by side</b>, so one
+        printed row is ${toInt(s.labelsPerRow, 1)} stickers of the same product -
+        <b>${toNum(s.labelWidthMm)} x ${toNum(s.labelHeightMm)} mm</b> each, printed as one
+        <b>${toNum(s.labelWidthMm) * Math.max(1, toInt(s.labelsPerRow, 1)) + toNum(s.labelGapMm) * (Math.max(1, toInt(s.labelsPerRow, 1)) - 1)} x ${toNum(s.labelHeightMm)} mm</b> row.
+        Ten labels then come out as five rows. Set the <b>printer's own paper size to that row</b>,
+        not to one sticker - <b>Print size test</b> below checks it.</p>
       <label class="check"><input type="checkbox" name="labelShowPrice" ${s.labelShowPrice !== false ? "checked" : ""}><span>Print price on labels</span></label>
-      <label class="check"><input type="checkbox" name="labelShowShopName" ${s.labelShowShopName ? "checked" : ""}><span>Print shop name on labels</span></label>` : ""}
+      <label class="check"><input type="checkbox" name="labelShowShopName" ${s.labelShowShopName ? "checked" : ""}><span>Print shop name on labels</span></label>
+      <label class="field"><span>Turn labels on the roll</span>
+        <select id="se-labelrotate">
+          ${[0, 90, 180, 270].map((d) => `<option value="${d}" ${labelRotation() === d ? "selected" : ""}>${d === 0 ? "No turn" : d + "°"}</option>`).join("")}
+        </select></label>` : ""}
       <div class="small muted mb">Printer status: ${esc(printerStatus().text)}</div>
       <div class="btn-row">
-        <button class="btn btn-soft btn-sm" id="se-test">${icon("print")} Test print</button>
-        <button class="btn btn-soft btn-sm" id="se-hw">${icon("bt")} Hardware panel</button>
+        <button class="btn btn-soft btn-sm" id="se-test">${icon("print")} Test bill</button>
+        <button class="btn btn-soft btn-sm" id="se-testlabel">${icon("qr")} Test label row</button>
+        <button class="btn btn-soft btn-sm" id="se-sizetest">${icon("tag")} Print size test</button>
+        <button class="btn btn-soft btn-sm" id="se-hw">${icon("print")} Printer setup</button>
       </div>
     </div>
 
@@ -163,6 +195,37 @@ export async function mount(view, { go }) {
   /* ---------- wiring ---------- */
   view.querySelector("#se-printmode").value = printerMode();
   view.querySelector("#se-printmode").onchange = (e) => { setPrinterMode(e.target.value); ok("Print mode saved"); };
+
+  const rotateSel = view.querySelector("#se-labelrotate");
+  if (rotateSel) rotateSel.onchange = (e) => { setLabelRotation(e.target.value); ok("Label turn saved"); };
+
+  /* One row of sample stickers, so the roll can be lined up without
+     spending a bill on it. */
+  const testLabelBtn = view.querySelector("#se-testlabel");
+  if (testLabelBtn) testLabelBtn.onclick = async () => {
+    const across = Math.max(1, toInt(fieldVal("labelsPerRow", s.labelsPerRow), 1));
+    try {
+      busy(true, "Printing…");
+      await printLabels([{
+        product: {
+          id: "test", productName: s.businessName || "VYRA SAREES",
+          sku: "TEST-1234", barcode: "TEST-1234", sellingPrice: 999,
+          colour: "Test", size: "-"
+        },
+        qty: across,
+        type: "barcode"
+      }], {
+        ...s,
+        labelWidthMm: toInt(fieldVal("labelWidthMm", s.labelWidthMm), 50),
+        labelHeightMm: toInt(fieldVal("labelHeightMm", s.labelHeightMm), 25),
+        labelsPerRow: across,
+        labelGapMm: toNum(fieldVal("labelGapMm", s.labelGapMm), 0),
+        labelShiftXMm: toNum(fieldVal("labelShiftXMm", s.labelShiftXMm), 0),
+        labelShiftYMm: toNum(fieldVal("labelShiftYMm", s.labelShiftYMm), 0)
+      });
+      ok(`One row of ${across} sent to ${labelPrinter() || "the label printer"}`);
+    } catch (e) { err(e.message); } finally { busy(false); }
+  };
 
   let logoFile = null;
   const logoBtn = view.querySelector("#se-logo-btn");
@@ -199,14 +262,50 @@ export async function mount(view, { go }) {
           "Test print");
         ok("Print preview opened"); return;
       }
-      const p = new Escpos(toNum(fieldVal("printerWidth", s.printerWidth), 58));
+      const p = newReceiptDoc({ ...s, printerWidth: toNum(fieldVal("printerWidth", s.printerWidth), 58) });
       p.align("center").bold(true).size(2, 2).line(fieldVal("businessName", s.businessName) || "VYRA SAREES")
         .size(1, 1).bold(false).line(fieldVal("businessType", s.businessType))
         .rule().align("left").lr("Test", "OK").rule()
         .align("center").line(fieldVal("footerMessage", s.footerMessage) || "Thank you").feed(2).cut();
-      await p.print(); ok("Test sent");
+      await sendDoc(p); ok("Test sent");
     } catch (e) { err(e.message); }
   };
+  /* Prints a ruler at the row's true size. Measured against a tape it
+     shows in one go whether the printer is scaling the artwork. */
+  const sizeBtn = view.querySelector("#se-sizetest");
+  if (sizeBtn) sizeBtn.onclick = async () => {
+    const settings = {
+      ...s,
+      labelWidthMm: toInt(fieldVal("labelWidthMm", s.labelWidthMm), 50),
+      labelHeightMm: toInt(fieldVal("labelHeightMm", s.labelHeightMm), 25),
+      labelsPerRow: Math.max(1, toInt(fieldVal("labelsPerRow", s.labelsPerRow), 1)),
+      labelGapMm: toNum(fieldVal("labelGapMm", s.labelGapMm), 0),
+      labelShiftXMm: toNum(fieldVal("labelShiftXMm", s.labelShiftXMm), 0),
+      labelShiftYMm: toNum(fieldVal("labelShiftYMm", s.labelShiftYMm), 0)
+    };
+    try {
+      busy(true, "Printing…");
+      const out = await printCalibration(settings);
+      busy(false);
+      await confirmDialog(
+        [
+          `A test row went to ${labelPrinter() || "the printer"}.`,
+          "",
+          `It should measure ${out.rowMm} mm across and ${out.heightMm} mm tall,`,
+          `as ${out.across} stickers of ${out.widthMm} x ${out.heightMm} mm.`,
+          "",
+          "Hold a tape against it:",
+          `• Right size, frame inside each sticker — nothing to change.`,
+          `• Everything squeezed into ONE sticker — the printer's paper is set`,
+          `  to one label. Set it to ${out.rowMm} x ${out.heightMm} mm in the`,
+          "  printer's preferences in Windows.",
+          "• Right shape but too big or small — set Scale to 100 in the print box.",
+          "• Sticker itself is a different size — type its real size above."
+        ].join("\n"),
+        { okText: "Got it", cancelText: "" });
+    } catch (e) { err(e.message); } finally { busy(false); }
+  };
+
   view.querySelector("#se-pwd").onclick = () => passwordSheet();
 
   const saveBtn = view.querySelector("#se-save");
@@ -236,6 +335,10 @@ export async function mount(view, { go }) {
         printerWidth: toInt(d.printerWidth, 58),
         labelWidthMm: toInt(d.labelWidthMm, 50),
         labelHeightMm: toInt(d.labelHeightMm, 25),
+        labelsPerRow: Math.min(4, Math.max(1, toInt(d.labelsPerRow, 1))),
+        labelGapMm: toNum(d.labelGapMm),
+        labelShiftXMm: toNum(d.labelShiftXMm),
+        labelShiftYMm: toNum(d.labelShiftYMm),
         labelShowPrice: !!d.labelShowPrice,
         labelShowShopName: !!d.labelShowShopName
       };
