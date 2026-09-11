@@ -1,19 +1,17 @@
 /* ============================================================
    VYRA SAREES - printable documents
    ------------------------------------------------------------
-   Builds the bill, an HTML twin used for on-screen preview and
-   browser printing, and the QR / barcode sticker jobs. The same
-   layout code drives both builders: artwork for the wired
-   printer, ESC/POS bytes for a receipt printer asked to take
-   them raw.
+   Builds the bill and an HTML twin of it used for on-screen
+   preview and browser printing. One layout drives both builders:
+   artwork for the wired printer, ESC/POS bytes for a receipt
+   printer asked to take them raw. Stickers are hw/labels.js.
    ============================================================ */
 import {
-  Escpos, sendBytes, printHtmlFallback, printCanvasRun,
-  usesBrowserPrint, rawReceipts, receiptPrinter, labelPrinter, labelRotation
+  Escpos, sendBytes, printHtmlFallback,
+  usesBrowserPrint, rawReceipts, receiptPrinter
 } from "./printer.js";
 import { PaperDoc } from "./paper.js";
-import { labelRowCanvas, labelRowWidthMm, calibrationRowCanvas } from "../codes/codes.js";
-import { esc, fmtDate, fmtTime, num, round2, toInt, toNum } from "../utils.js";
+import { esc, fmtDate, fmtTime, num, round2, toNum } from "../utils.js";
 
 export { usesBrowserPrint } from "./printer.js";
 
@@ -196,87 +194,6 @@ export function receiptHtml(sale, settings, { copy = "" } = {}) {
   </table>
   <hr>
   <div class="c">${esc(settings.footerMessage || "Thank You!").replace(/\n/g, "<br>")}</div>`;
-}
-
-/* ============================================================
-   QR / barcode sticker printing
-   ============================================================ */
-/**
- * jobs = [{ product, qty, type:"qr"|"barcode" }]
- *
- * The label roll carries several stickers side by side, so the page the
- * printer feeds is a whole *row* - the same product's sticker repeated
- * across it. Each row therefore yields `labelsPerRow` stickers, and a run
- * of 10 labels on a two-up roll is 5 rows. Everything is drawn as artwork,
- * so it prints through the label printer's own Windows driver.
- */
-export async function printLabels(jobs, settings, onProgress) {
-  const widthMm = toNum(settings.labelWidthMm, 50);
-  const heightMm = toNum(settings.labelHeightMm, 25);
-  const across = Math.max(1, toInt(settings.labelsPerRow, 1));
-  const gapMm = Math.max(0, toNum(settings.labelGapMm, 0));
-  const rowWidthMm = labelRowWidthMm({ widthMm, across, gapMm });
-  const total = jobs.reduce((a, j) => a + toNum(j.qty, 1), 0);
-
-  const pages = [];
-  let drawn = 0;
-  for (const job of jobs) {
-    const canvas = await labelRowCanvas(job.product, {
-      widthMm, heightMm, across, gapMm,
-      shiftXMm: toNum(settings.labelShiftXMm, 0),
-      shiftYMm: toNum(settings.labelShiftYMm, 0),
-      type: job.type || "qr",
-      showPrice: settings.labelShowPrice !== false,
-      shopName: settings.labelShowShopName ? settings.businessName : ""
-    });
-    // A row prints `across` stickers at once, so an odd count rounds up:
-    // the last row still comes out full.
-    const wanted = Math.max(1, toNum(job.qty, 1));
-    const rows = Math.ceil(wanted / across);
-    pages.push({ canvas, copies: rows });
-    drawn = Math.min(total, drawn + rows * across);
-    if (onProgress) onProgress(drawn, total);
-  }
-
-  await printCanvasRun(pages, {
-    widthMm: rowWidthMm,
-    heightMm,
-    rotate: labelRotation(),
-    printer: labelPrinter(),
-    title: "VYRA SAREES labels"
-  });
-  return total;
-}
-
-/**
- * Print one measuring row: the same path, the same size, but carrying a
- * ruler instead of a product. Held against a tape it says straight away
- * whether the printer is putting the row out at its true size.
- */
-export async function printCalibration(settings) {
-  const widthMm = toNum(settings.labelWidthMm, 50);
-  const heightMm = toNum(settings.labelHeightMm, 25);
-  const across = Math.max(1, toInt(settings.labelsPerRow, 1));
-  const gapMm = Math.max(0, toNum(settings.labelGapMm, 0));
-  const canvas = calibrationRowCanvas({
-    widthMm, heightMm, across, gapMm,
-    shiftXMm: toNum(settings.labelShiftXMm, 0),
-    shiftYMm: toNum(settings.labelShiftYMm, 0)
-  });
-
-  await printCanvasRun([{ canvas, copies: 1 }], {
-    widthMm: labelRowWidthMm({ widthMm, across, gapMm }),
-    heightMm,
-    rotate: labelRotation(),
-    printer: labelPrinter(),
-    title: "VYRA SAREES size test"
-  });
-  return { widthMm, heightMm, across, rowMm: labelRowWidthMm({ widthMm, across, gapMm }) };
-}
-
-/** Print one 58/80mm-wide QR block for a single product (receipt printer style). */
-export async function printProductQr(product, settings, copies = 1, type = "qr") {
-  await printLabels([{ product, qty: copies, type }], settings);
 }
 
 /* ============================================================

@@ -1,7 +1,7 @@
 /* ============================================================
    VYRA SAREES - Business settings
    ============================================================ */
-import { state, can, isAdmin } from "../store.js";
+import { state, can, isAdmin, costsStatus, refreshCosts } from "../store.js";
 import { saveSettings, uploadImage, DEFAULT_SETTINGS, peekBlockSize, ensureBlocks, logActivity } from "../db.js";
 import { changePassword } from "../auth.js";
 import { icon, openSheet, emptyState, ok, err, warn, busy, confirmDialog, formData, toast } from "../ui.js";
@@ -10,7 +10,8 @@ import {
   setPaperWidth, printerMode, setPrinterMode, printerStatus, printHtmlFallback,
   labelRotation, setLabelRotation, labelPrinter
 } from "../hw/printer.js";
-import { usesBrowserPrint, newReceiptDoc, sendDoc, printLabels, printCalibration } from "../hw/documents.js";
+import { usesBrowserPrint, newReceiptDoc, sendDoc } from "../hw/documents.js";
+import { printLabels, printSizeTest } from "../hw/labels.js";
 
 export const title = "Settings";
 
@@ -181,6 +182,20 @@ export async function mount(view, { go }) {
       </div>
     </div>
 
+    ${isAdmin() ? `
+    <div class="sec-title">Owner figures</div>
+    <div class="card">
+      <div class="trow"><span>Purchase prices held</span>
+        <b>${Object.keys(state.costs || {}).length} product${Object.keys(state.costs || {}).length === 1 ? "" : "s"}</b></div>
+      <div class="trow"><span>Last load</span>
+        <b>${costsStatus().loaded ? "OK" : "failed"}</b></div>
+      ${costsStatus().loaded ? "" : `<p class="form-error">${esc(costsStatus().error || "Not loaded yet.")}</p>`}
+      <button class="btn btn-soft btn-sm mt" id="se-costs-retry">Load purchase prices again</button>
+      <p class="form-note">Purchase price, supplier, margin and stock value are yours alone - staff
+        devices are never sent them. A product showing <b>Not recorded</b> simply has no purchase
+        price saved yet: open it and use <b>Edit</b>.</p>
+    </div>` : ""}
+
     <div class="sec-title">Account</div>
     <div class="card">
       <div class="row" style="cursor:default;padding-left:0;padding-right:0">
@@ -285,7 +300,7 @@ export async function mount(view, { go }) {
     };
     try {
       busy(true, "Printing…");
-      const out = await printCalibration(settings);
+      const out = await printSizeTest(settings);
       busy(false);
       await confirmDialog(
         [
@@ -303,6 +318,18 @@ export async function mount(view, { go }) {
           "• Sticker itself is a different size — type its real size above."
         ].join("\n"),
         { okText: "Got it", cancelText: "" });
+    } catch (e) { err(e.message); } finally { busy(false); }
+  };
+
+  const costsRetry = view.querySelector("#se-costs-retry");
+  if (costsRetry) costsRetry.onclick = async () => {
+    try {
+      busy(true, "Loading…");
+      await refreshCosts({ retries: 0 });
+      const st = costsStatus();
+      if (st.loaded) ok(`${Object.keys(state.costs || {}).length} purchase prices loaded`);
+      else err(st.error);
+      go("#/settings");
     } catch (e) { err(e.message); } finally { busy(false); }
   };
 

@@ -6,7 +6,7 @@
    never touched here - the Firestore SDK has its own on-device
    cache and replays writes made while offline.
    ============================================================ */
-const VERSION = "vyra-v6-wired-print";
+const VERSION = "vyra-v7-labels";
 const SHELL = [
   "./",
   "./index.html",
@@ -23,6 +23,7 @@ const SHELL = [
   "./js/codes/codes.js",
   "./js/hw/printer.js",
   "./js/hw/paper.js",
+  "./js/hw/labels.js",
   "./js/hw/camera.js",
   "./js/hw/scanner.js",
   "./js/hw/documents.js",

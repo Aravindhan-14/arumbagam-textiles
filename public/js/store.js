@@ -23,6 +23,8 @@ export const state = {
   customers: [],
   suppliers: [],
   costs: {},                // productId -> purchase price, owner only
+  costsLoaded: false,       // the owner's cost records actually arrived
+  costsError: "",           // ... or why they did not
   ready: { products: false, categories: false, customers: false, suppliers: false },
   online: navigator.onLine
 };
@@ -57,8 +59,12 @@ const MIRRORS = {
 /* ---------- cost prices (owner only) ----------
    These live in their own collection that the security rules open to the
    admin alone, so a staff device is never sent them. */
-export async function refreshCosts() {
-  if (!canSeeCost()) { state.costs = {}; emit("costs", state.costs); return; }
+export async function refreshCosts({ retries = 3 } = {}) {
+  if (!canSeeCost()) {
+    state.costs = {}; state.costsLoaded = false; state.costsError = "";
+    emit("costs", state.costs);
+    return;
+  }
   try {
     const map = {};
     (await listCosts()).forEach((c) => {
@@ -69,12 +75,36 @@ export async function refreshCosts() {
       };
     });
     state.costs = map;
-  } catch {
-    // Permission denied or offline - carry on without the numbers.
+    state.costsLoaded = true;
+    state.costsError = "";
+  } catch (e) {
+    // Offline, or the profile had not landed yet when this first ran. Either
+    // way the owner must not be shown an empty figure as if it were the
+    // truth, so the failure is kept and quietly retried.
     state.costs = state.costs || {};
+    state.costsLoaded = false;
+    state.costsError = costReason(e);
+    if (retries > 0) setTimeout(() => refreshCosts({ retries: retries - 1 }), 3000);
   }
   emit("costs", state.costs);
 }
+
+/** Say what actually went wrong, in words that point at the fix. */
+function costReason(e) {
+  const code = e?.code || "";
+  if (code === "permission-denied") {
+    return "Firestore refused the purchase prices. The rules for product_costs are not published yet, "
+      + "or this account's profile is not role admin. Publish the rules and sign in as the owner.";
+  }
+  if (code === "unavailable" || code === "failed-precondition" || /offline/i.test(e?.message || "")) {
+    return "No connection to Firestore, so the purchase prices could not be fetched.";
+  }
+  if (code === "unauthenticated") return "Signed out. Sign in again as the owner.";
+  return e?.message ? `${e.message}${code ? ` (${code})` : ""}` : "Purchase prices could not be loaded.";
+}
+
+/** Whether the owner's cost figures are trustworthy right now. */
+export const costsStatus = () => ({ loaded: state.costsLoaded, error: state.costsError });
 
 /** What we paid for one product. Zero for anyone who may not see costs. */
 export const costOf = (productId) => (canSeeCost() ? toNum(state.costs[productId]?.purchasePrice) : 0);
@@ -177,7 +207,7 @@ export function stopStore() {
   if (changeHandler) { window.removeEventListener("vyra:changed", changeHandler); changeHandler = null; }
   Object.keys(state.ready).forEach((k) => { state.ready[k] = false; });
   state.products = []; state.categories = []; state.customers = []; state.suppliers = [];
-  state.costs = {};
+  state.costs = {}; state.costsLoaded = false; state.costsError = "";
 }
 
 window.addEventListener("online", () => { state.online = true; emit("net", true); refreshCosts(); });

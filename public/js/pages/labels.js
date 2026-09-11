@@ -4,9 +4,9 @@
 import { state, searchProducts, findByCode, can } from "../store.js";
 import { icon, openSheet, emptyState, ok, err, warn, busy, confirmDialog, toast } from "../ui.js";
 import { esc, fileUrl, money, toNum, toInt, debounce, sum } from "../utils.js";
-import { labelPreviewHtml, hydrateCodeSlots, labelCanvas, qrPayload } from "../codes/codes.js";
-import { printLabels, usesBrowserPrint } from "../hw/documents.js";
-import { labelPrinter } from "../hw/printer.js";
+import { labelPreviewHtml, hydrateCodeSlots } from "../codes/codes.js";
+import { printLabels } from "../hw/labels.js";
+import { labelPrinter, usesBrowserPrint } from "../hw/printer.js";
 import { setScanHandler } from "../app.js";
 
 export const title = "QR / Barcode Labels";

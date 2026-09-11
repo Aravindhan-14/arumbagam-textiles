@@ -56,11 +56,15 @@ service cloud.firestore {
       allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin() || bootstrap();
 
-      // The first account on a fresh project becomes the admin; every other
-      // account is created by an admin from the Staff screen.
+      // The first account on a fresh project becomes the admin; later
+      // self-registrations land as inactive staff until an admin activates
+      // them, and an admin can create an account outright.
       allow create: if isAdmin()
         || (signedIn() && request.auth.uid == uid && bootstrap()
-            && request.resource.data.role == 'admin');
+            && request.resource.data.role == 'admin')
+        || (signedIn() && request.auth.uid == uid && !bootstrap()
+            && request.resource.data.role == 'staff'
+            && request.resource.data.status == 'inactive');
 
       allow update: if isAdmin()
         || (signedIn() && request.auth.uid == uid
@@ -80,7 +84,15 @@ service cloud.firestore {
       allow delete: if can('products.delete');
     }
 
-    /* What we paid. Owner only - a staff device never receives these. */
+    match /product_variants/{id} {
+      allow read: if isStaff();
+      allow write: if can('products.edit');
+    }
+
+    /* What we paid. Owner only - a staff device never receives these.
+       Note it is NOT a field on the product: every staff device reads
+       products, so a purchase price kept there would be handed straight
+       to them. That is why this collection exists. */
     match /product_costs/{id} {
       allow read, write: if isAdmin();
     }

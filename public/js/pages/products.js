@@ -1,14 +1,14 @@
 /* ============================================================
    VYRA SAREES - Products
    ============================================================ */
-import { state, on, searchProducts, can, canSeeCost, costOf, costSupplier, findByCode } from "../store.js";
-import { C, updateDocById, removeDoc, logActivity } from "../db.js";
+import { state, on, searchProducts, can, canSeeCost, costOf, costSupplier, costsStatus, findByCode } from "../store.js";
+import { C, updateDocById, removeDoc, removeCost, logActivity } from "../db.js";
 import { icon, openSheet, emptyState, toast, ok, err, warn, busy, confirmDialog } from "../ui.js";
 import { esc, fileUrl, money, toNum, debounce, stockStatus, fmtDate, download, toCsv } from "../utils.js";
 import { openProductEditor, productRow, pickProduct } from "./_shared.js";
 import { setScanHandler } from "../app.js";
 import { qrCanvas, barcodeCanvas, qrPayload, qrDetail } from "../codes/codes.js";
-import { printProductQr } from "../hw/documents.js";
+import { printProductLabel } from "../hw/labels.js";
 
 export const title = "Products";
 
@@ -125,6 +125,15 @@ export function openProductSheet(id, onChange, go) {
   const margin = toNum(p.sellingPrice) - cost;
   const marginPct = toNum(p.sellingPrice) ? (margin / toNum(p.sellingPrice)) * 100 : 0;
 
+  // An owner who has not recorded a purchase price must not be shown a
+  // margin of 100%: no cost means no margin to state, and a cost record that
+  // failed to load is a different thing again from one that was never made.
+  const costs = costsStatus();
+  const costText = cost ? money(cost)
+    : costs.error ? "Could not load — see Settings"
+      : "Not recorded — add it with Edit";
+  const marginText = cost ? `${money(margin)} (${marginPct.toFixed(1)}%)` : "—";
+
   openSheet({
     title: p.productName,
     body: `
@@ -147,11 +156,11 @@ export function openProductSheet(id, onChange, go) {
         ${detailRow("Fabric", p.fabric || "-")}
         ${detailRow("Product code", p.productCode || "-", true)}
         ${detailRow("Barcode", p.barcode || "-", true)}
-        ${showCost ? detailRow("Purchase price", cost ? money(cost) : "Not recorded") : ""}
-        ${showCost ? detailRow("Margin", `${money(margin)} (${marginPct.toFixed(1)}%)`) : ""}
+        ${showCost ? editableRow("Purchase price", costText, "ps-cost") : ""}
+        ${showCost ? detailRow("Margin", marginText) : ""}
         ${detailRow("GST", `${toNum(p.gstRate)}%`)}
         ${detailRow("Minimum stock", toNum(p.minimumStock))}
-        ${showCost ? detailRow("Supplier", costSupplier(p.id) || "-") : ""}
+        ${showCost ? editableRow("Supplier", costSupplier(p.id) || "-", "ps-supplier") : ""}
         ${detailRow("Added", fmtDate(p.createdAt))}
       </div>
       ${p.description ? `<p class="small muted">${esc(p.description)}</p>` : ""}
@@ -173,7 +182,12 @@ export function openProductSheet(id, onChange, go) {
       </div>
       ${can("products.edit") ? `<div class="divider"></div>
         <button class="btn btn-ghost btn-block" id="ps-toggle">
-          ${(p.status || "active") === "active" ? "Deactivate product" : "Reactivate product"}</button>` : ""}`,
+          ${(p.status || "active") === "active" ? "Deactivate product" : "Reactivate product"}</button>` : ""}
+      ${can("products.delete") ? `<button class="btn btn-danger btn-block mt" id="ps-delete">
+          ${icon("trash")} Delete product</button>
+        <p class="form-note">Deleting removes the product and its purchase price for good. Past bills
+          keep their own copy of what was sold, so they are not affected. To stop selling something
+          without losing it, deactivate it instead.</p>` : ""}`,
     footer: can("products.edit")
       ? `<button class="btn btn-soft" data-close>Close</button>
          <button class="btn btn-primary" id="ps-edit">${icon("edit")} Edit</button>`
@@ -203,8 +217,30 @@ export function openProductSheet(id, onChange, go) {
         sessionStorage.setItem("vyra.pendingScan", qrPayload(p));
         (go || window.VYRA.go)("#/billing");
       };
+      // The owner's own figures: tapping either one opens the editor that
+      // holds them, so a blank is one tap from being filled in.
+      ["ps-cost", "ps-supplier"].forEach((id) => {
+        const row = root.querySelector("#" + id);
+        if (row) row.onclick = () => { api.close(); openProductEditor(p, onChange); };
+      });
+
       const edit = root.querySelector("#ps-edit");
       if (edit) edit.onclick = () => { api.close(); openProductEditor(p, onChange); };
+      const del = root.querySelector("#ps-delete");
+      if (del) del.onclick = async () => {
+        if (!await confirmDialog(
+          `Delete "${p.productName}" for good? This cannot be undone.`,
+          { okText: "Delete", danger: true })) return;
+        try {
+          busy(true, "Deleting…");
+          await removeDoc(C.products, p.id);
+          await removeCost(p.id);
+          logActivity("PRODUCT_DELETED", `${p.sku} · ${p.productName}`, "product", p.id);
+          api.close(); ok("Product deleted");
+          if (onChange) onChange();
+        } catch (e) { err(e.message); } finally { busy(false); }
+      };
+
       const tog = root.querySelector("#ps-toggle");
       if (tog) tog.onclick = async () => {
         const next = (p.status || "active") === "active" ? "inactive" : "active";
@@ -224,7 +260,7 @@ async function doPrint(p, type) {
   try {
     busy(true, "Sending to printer…");
     const copies = 1;
-    await printProductQr(p, state.settings || {}, copies, type);
+    await printProductLabel(p, state.settings || {}, type, copies);
     ok("Sent to printer");
   } catch (e) { err(e.message); } finally { busy(false); }
 }
@@ -232,3 +268,8 @@ async function doPrint(p, type) {
 const detailRow = (k, v, mono = false) =>
   `<div class="row" style="cursor:default"><div class="mid"><small>${esc(k)}</small></div>
    <div class="end"><b class="${mono ? "mono" : ""}" style="font-weight:600">${esc(v)}</b></div></div>`;
+
+/** Same row, but the owner can tap it to open the editor at that field. */
+const editableRow = (k, v, id) =>
+  `<div class="row" id="${id}"><div class="mid"><small>${esc(k)}</small></div>
+   <div class="end"><b style="font-weight:600">${esc(v)}</b></div></div>`;
