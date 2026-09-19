@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VYRA SAREES - label check</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:0;padding:24px;background:#f4f4f6;color:#111}
+  h1{font-size:20px;margin:0 0 4px}
+  h2{font-size:16px;margin:0 0 4px}
+  p.sub{margin:0 0 20px;color:#666;font-size:13px}
+  .card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:16px;margin-bottom:16px}
+  .row{display:flex;align-items:center;gap:10px;font-size:15px;padding:6px 0}
+  .tag{font-weight:700;padding:3px 10px;border-radius:20px;font-size:13px;color:#fff;min-width:74px;text-align:center}
+  .ok{background:#1a7f37} .bad{background:#c62828}
+  canvas{display:block;border:1px dashed #c00;background:#fff}
+  .cap{font-size:12px;color:#666;margin:6px 0 14px}
+  button{font-size:15px;padding:10px 18px;border:0;border-radius:8px;background:#c62828;color:#fff;cursor:pointer}
+  #msg{font-size:14px;margin-left:10px}
+  b.mm{font-size:17px}
+</style>
+</head>
+<body>
+
+<h1>VYRA SAREES &mdash; label check</h1>
+<p class="sub">Label-ah render panni, edge-la irundhu content evlo dhooram irukku-nu mm-la alandhu kaatum.</p>
+
+<div class="card">
+  <h2>1. Browser fresh file-ah load pannudhaa?</h2>
+  <div class="row"><span id="t-cache" class="tag">...</span> <span id="t-cache-txt"></span></div>
+  <button id="nuke" style="margin-top:8px">Service worker + cache ellam clear pannu</button>
+  <span id="msg"></span>
+</div>
+
+<div class="card">
+  <h2>2. Barcode label</h2>
+  <p class="cap">Sivappu dashed line = sticker edge (50 x 25 mm). Ippo side margin <b>6 mm</b> irukkanum.</p>
+  <div id="bc"></div>
+  <p class="cap" id="bc-mm"></p>
+
+  <h2 style="margin-top:20px">3. QR label</h2>
+  <p class="cap">Side margin <b>4 mm</b> irukkanum.</p>
+  <div id="qr"></div>
+  <p class="cap" id="qr-mm"></p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+<script type="module">
+const DPMM = 8;
+
+/* --- 1. Is the service worker holding an old copy? -------------------- */
+// The same file asked for twice: once with a query string the cache has
+// never seen, once plainly. If the two differ, the cache is stale.
+const bust = "./js/hw/labels.js?cb=" + Date.now() + Math.random();
+const [fresh, cached] = await Promise.all([
+  fetch(bust, { cache: "reload" }).then((r) => r.text()).catch(() => "1"),
+  fetch("./js/hw/labels.js").then((r) => r.text()).catch(() => "2")
+]);
+
+const same = fresh === cached;
+const tag = document.getElementById("t-cache");
+tag.textContent = same ? "SARI" : "PAZHAYADHU";
+tag.className = "tag " + (same ? "ok" : "bad");
+document.getElementById("t-cache-txt").textContent = same
+  ? "Browser fresh file-ah dhaan load pannudhu. Cache problem illa."
+  : "Service worker pazhaya file-ah kudukkuthu. Keezha irukkura button press pannu, appuram Ctrl+Shift+R.";
+
+document.getElementById("nuke").onclick = async () => {
+  const msg = document.getElementById("msg");
+  msg.textContent = "clearing...";
+  for (const r of (await navigator.serviceWorker?.getRegistrations?.()) || []) await r.unregister();
+  for (const k of await caches.keys()) await caches.delete(k);
+  msg.textContent = "Clear aayiduchu. Ippo Ctrl+Shift+R press pannu.";
+};
+
+/* --- 2. Render, and measure the real ink margins ---------------------- */
+// Whatever the constants are called, this reads the picture itself: the
+// first and last column that actually carries ink.
+function inkEdges(canvas) {
+  const { width: w, height: h } = canvas;
+  const d = canvas.getContext("2d").getImageData(0, 0, w, h).data;
+  let left = -1, right = -1;
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) {
+      const i = (y * w + x) * 4;
+      if (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114 < 200) {
+        if (left < 0) left = x;
+        right = x;
+        break;
+      }
+    }
+  }
+  return { left, right, w };
+}
+
+const { buildLabel, labelPlan } = await import(bust);
+const plan = labelPlan({});
+const product = {
+  productName: "SILK SAREE", sku: "VYS-SAR-00264",
+  barcode: "VYS-SAR-00264", sellingPrice: 630
+};
+
+for (const [id, type] of [["bc", "barcode"], ["qr", "qr"]]) {
+  const c = await buildLabel(product, plan, type);
+  const e = inkEdges(c);
+  c.style.width = (c.width * 2) + "px";      // 2x, so the margins are easy to see
+  c.style.height = (c.height * 2) + "px";
+  document.getElementById(id).appendChild(c);
+  document.getElementById(id + "-mm").innerHTML =
+    `Alandhadhu &rarr; left margin <b class="mm">${(e.left / DPMM).toFixed(1)} mm</b>, ` +
+    `right margin <b class="mm">${((e.w - 1 - e.right) / DPMM).toFixed(1)} mm</b>`;
+}
+</script>
+</body>
+</html>

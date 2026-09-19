@@ -3,7 +3,7 @@
    ============================================================ */
 import { state, on, searchSuppliers, can } from "../store.js";
 import { C, listDocs, updateDocById, incr, logActivity } from "../db.js";
-import { icon, openSheet, emptyState, statCard, ok, err, busy, toast } from "../ui.js";
+import { icon, openSheet, emptyState, statCard, ok, err, busy, toast, refocus } from "../ui.js";
 import { esc, money, money0, toNum, debounce, fmtDate, sum, download, toCsv } from "../utils.js";
 import { openSupplierEditor } from "./_shared.js";
 
@@ -37,7 +37,7 @@ export async function mount(view, { go }) {
       </ul>
       <button class="btn btn-soft btn-sm mt" id="su-export">${icon("download")} Export CSV</button>`;
 
-    view.querySelector("#su-q").oninput = debounce((e) => { q = e.target.value.trim(); paint(); }, 150);
+    view.querySelector("#su-q").oninput = debounce((e) => { q = e.target.value.trim(); paint(); refocus(view, "#su-q"); }, 150);
     view.querySelector("#su-add").onclick = () => openSupplierEditor(null, () => paint());
     view.querySelectorAll("[data-id]").forEach((li) => {
       li.onclick = () => supplierSheet(state.suppliers.find((s) => s.id === li.dataset.id), paint, go);

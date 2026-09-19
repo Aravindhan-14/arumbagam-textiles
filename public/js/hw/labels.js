@@ -21,7 +21,8 @@ import { printCanvasRun, labelPrinter, labelRotation } from "./printer.js";
 import { toInt, toNum } from "../utils.js";
 
 const DPMM = 8;        // 203 dpi print head, 8 dots per millimetre
-const PAD_MM = 2.5;    // quiet border kept clear on all four sticker edges
+const PAD_Y_MM = 2.5;  // quiet border kept clear along the top and bottom
+const PAD_X_MM = 5;    // a wider one at the sides, so nothing crowds the edge
 const mm = (v) => Math.round(v * DPMM);
 
 /* ============================================================
@@ -61,14 +62,15 @@ export async function buildLabel(product, plan, type = "qr") {
   ctx.fillStyle = "#000";
   ctx.textBaseline = "top";
 
-  const pad = mm(PAD_MM);
-  const safeW = W - pad * 2;
-  const safeH = H - pad * 2;
+  const padX = mm(PAD_X_MM);
+  const padY = mm(PAD_Y_MM);
+  const safeW = W - padX * 2;
+  const safeH = H - padY * 2;
 
   // Nothing may leave the sticker, whatever the product is called.
   ctx.save();
   ctx.beginPath();
-  ctx.rect(pad, pad, safeW, safeH);
+  ctx.rect(padX, padY, safeW, safeH);
   ctx.clip();
 
   const code = qrPayload(product);
@@ -77,7 +79,9 @@ export async function buildLabel(product, plan, type = "qr") {
   if (type === "barcode") {
     const rows = [
       { text: product.productName || "", px: H * 0.10, bold: true },
-      ...(product.sku ? [{ text: product.sku, px: H * 0.075, mono: true }] : []),
+      // The code is set at the price's size so it reads from a distance, and
+      // kept thin and light so the price is still the louder of the two.
+      ...(product.sku ? [{ text: product.sku, px: H * 0.125, code: true }] : []),
       ...(plan.showPrice ? [{ text: price, px: H * 0.125, heavy: true }] : [])
     ];
     const text = measure(ctx, rows, safeW);
@@ -86,11 +90,11 @@ export async function buildLabel(product, plan, type = "qr") {
     const bw = Math.min(safeW, bars.width);
     const bh = Math.round(bars.height * (bw / bars.width));
 
-    let y = pad + Math.max(0, Math.round((safeH - (text.height + bh + mm(1))) / 2));
-    y = write(ctx, text.rows[0], pad, y, safeW, "center");
-    ctx.drawImage(bars, pad + Math.round((safeW - bw) / 2), y, bw, bh);
+    let y = padY + Math.max(0, Math.round((safeH - (text.height + bh + mm(1))) / 2));
+    y = write(ctx, text.rows[0], padX, y, safeW, "center");
+    ctx.drawImage(bars, padX + Math.round((safeW - bw) / 2), y, bw, bh);
     y += bh + mm(1);
-    for (const row of text.rows.slice(1)) y = write(ctx, row, pad, y, safeW, "center");
+    for (const row of text.rows.slice(1)) y = write(ctx, row, padX, y, safeW, "center");
   } else {
     // A square code beside its text, the pair centred as one block.
     const qs = Math.min(Math.round(safeH * 0.86), Math.round(safeW * 0.34));
@@ -101,15 +105,15 @@ export async function buildLabel(product, plan, type = "qr") {
       ...(plan.shopName ? [{ text: plan.shopName, px: H * 0.072, bold: true }] : []),
       { text: product.productName || "", px: H * 0.095, bold: true },
       ...(metaOf(product) ? [{ text: metaOf(product), px: H * 0.068 }] : []),
-      ...(product.sku ? [{ text: product.sku, px: H * 0.075, mono: true }] : []),
+      ...(product.sku ? [{ text: product.sku, px: H * 0.125, code: true }] : []),
       ...(plan.showPrice ? [{ text: price, px: H * 0.125, heavy: true, gapBefore: H * 0.015 }] : [])
     ];
     const text = measure(ctx, rows, safeW - qs - bridge);
     const blockW = qs + bridge + Math.ceil(text.width);
-    const x = pad + Math.max(0, Math.round((safeW - blockW) / 2));
+    const x = padX + Math.max(0, Math.round((safeW - blockW) / 2));
 
-    ctx.drawImage(img, x, pad + Math.round((safeH - qs) / 2), qs, qs);
-    let y = pad + Math.max(0, Math.round((safeH - text.height) / 2));
+    ctx.drawImage(img, x, padY + Math.round((safeH - qs) / 2), qs, qs);
+    let y = padY + Math.max(0, Math.round((safeH - text.height) / 2));
     for (const row of text.rows) y = write(ctx, row, x + qs + bridge, y, safeW - qs - bridge);
   }
 
@@ -266,10 +270,11 @@ function send(pages, plan, title) {
    shrinking is no longer decent.
    ============================================================ */
 const fontOf = (r) => {
-  const weight = r.heavy ? "900 " : r.bold ? "bold " : "";
+  const weight = r.heavy ? "900 " : (r.bold || r.code) ? "bold " : "";
   const family = r.mono ? '"Consolas",monospace'
-    : r.heavy ? '"Arial Black","Arial Bold",Arial,sans-serif'
-      : "Arial, sans-serif";
+    : r.code ? '"Segoe UI","Helvetica Neue",Arial,sans-serif'
+      : r.heavy ? '"Arial Black","Arial Bold",Arial,sans-serif'
+        : "Arial, sans-serif";
   return `${weight}${Math.round(r.px)}px ${family}`;
 };
 

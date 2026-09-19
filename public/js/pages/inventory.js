@@ -3,7 +3,7 @@
    ============================================================ */
 import { state, on, searchProducts, can, canSeeCost, costOf, lowStockProducts, outOfStockProducts, totalStockUnits, stockValue } from "../store.js";
 import { C, listDocs, addStock, adjustStock, updateDocById } from "../db.js";
-import { icon, openSheet, emptyState, statCard, ok, err, warn, busy, confirmDialog, formData, toast } from "../ui.js";
+import { icon, openSheet, emptyState, statCard, ok, err, warn, busy, confirmDialog, formData, toast, refocus } from "../ui.js";
 import { esc, fileUrl, money, money0, toNum, toInt, debounce, stockStatus, fmtDateTime, download, toCsv, ago } from "../utils.js";
 import { pickProduct } from "./_shared.js";
 import { setScanHandler } from "../app.js";
@@ -57,7 +57,7 @@ export async function mount(view, { params, go }) {
       </ul>
       <button class="btn btn-soft btn-sm mt" id="iv-export">${icon("download")} Export stock CSV</button>`;
 
-    view.querySelector("#iv-q").oninput = debounce((e) => { q = e.target.value.trim(); paint(); }, 150);
+    view.querySelector("#iv-q").oninput = debounce((e) => { q = e.target.value.trim(); paint(); refocus(view, "#iv-q"); }, 150);
     view.querySelectorAll("[data-f]").forEach((b) => { b.onclick = () => { filter = b.dataset.f; paint(); }; });
     view.querySelectorAll("[data-id]").forEach((li) => {
       li.onclick = () => stockSheet(state.products.find((p) => p.id === li.dataset.id), paint);

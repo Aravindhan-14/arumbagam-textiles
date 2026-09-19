@@ -2,24 +2,40 @@
    VYRA SAREES - Dashboard
    ============================================================ */
 import { state, on, lowStockProducts, outOfStockProducts, totalStockUnits, stockValue, can, canSeeCost } from "../store.js";
-import { queryRange, recent, C } from "../db.js";
+import { queryRange, recent, listDocs, C } from "../db.js";
 import { icon, statCard, emptyState, toast } from "../ui.js";
-import { esc, money0, money, startOfDay, endOfDay, toNum, fmtTime, ago, sum, fmtDate } from "../utils.js";
+import { esc, money0, money, startOfDay, endOfDay, toNum, round2, fmtTime, ago, sum, fmtDate } from "../utils.js";
 
 export const title = "Dashboard";
 
 export async function mount(view, { go }) {
   const paint = async () => {
     view.innerHTML = skeleton();
-    const [sales, purchases] = await Promise.all([
+    const [sales, purchases, unpaid] = await Promise.all([
       queryRange(C.sales, startOfDay(), endOfDay()).catch(() => []),
-      recent(C.purchases, 5).catch(() => [])
+      recent(C.purchases, 5).catch(() => []),
+      // Every bill still carrying a balance, whenever it was written. The
+      // running total on each customer can fall behind - a till that was
+      // offline, a bill from before dues were counted - and a pending amount
+      // that quietly reads zero is the one thing the shop must never be
+      // shown, so the bills are asked as well.
+      listDocs(C.sales, { where: [["paymentStatus", "in", ["credit", "partial"]]], limit: 2000 })
+        .catch(() => null)
     ]);
     const active = sales.filter((s) => s.status !== "cancelled");
     const todayTotal = sum(active, (s) => s.grandTotal);
     const low = lowStockProducts(), out = outOfStockProducts();
     const dues = state.customers.filter((c) => toNum(c.outstanding) > 0);
     const dueTotal = sum(dues, (c) => c.outstanding);
+
+    const onCredit = unpaid === null ? null : round2(sum(
+      unpaid.filter((s) => s.status !== "cancelled" && s.customerId),
+      (s) => Math.max(0, toNum(s.grandTotal) - toNum(s.amountReceived))
+    ));
+    // Collections come off the running total and not off the bill, so the
+    // bills reading higher is normal. Lower is not, and neither is a zero
+    // sitting under bills that are plainly unpaid.
+    const shortfall = onCredit !== null && onCredit > dueTotal + 0.01 ? round2(onCredit - dueTotal) : 0;
 
     view.innerHTML = `
       ${setupCard()}
@@ -35,7 +51,9 @@ export async function mount(view, { go }) {
         ${statCard("Low Stock", low.length, "at or below minimum", low.length ? "warn" : "")}
         ${statCard("Out of Stock", out.length, "needs restocking", out.length ? "danger" : "")}
         ${statCard("Customers", state.customers.length, `${dues.length} with dues`)}
-        ${statCard("Pending Payments", money0(dueTotal), "customer outstanding", dueTotal > 0 ? "warn" : "")}
+        ${statCard("Pending Payments", money0(dueTotal),
+    shortfall ? `${money0(onCredit)} on credit in bills` : "customer outstanding",
+    shortfall ? "danger" : dueTotal > 0 ? "warn" : "")}
         ${canSeeCost() ? statCard("Stock Value", money0(stockValue()), "at purchase cost") : ""}
         ${canSeeCost() ? statCard("Suppliers", state.suppliers.length, `${money0(sum(state.suppliers, (s) => s.outstanding))} payable`) : ""}
       </div>
@@ -50,7 +68,7 @@ export async function mount(view, { go }) {
         <button data-go="#/sales">${icon("rupee")}Sales History</button>
       </div>
 
-      ${alerts(low, out, dues)}
+      ${alerts(low, out, dues, shortfall, onCredit)}
 
       <div class="sec-title">Recent Bills</div>
       <ul class="list card pad0" id="dash-bills">
@@ -103,8 +121,16 @@ function setupCard() {
   </div>`;
 }
 
-function alerts(low, out, dues) {
+function alerts(low, out, dues, shortfall = 0, onCredit = 0) {
   const items = [];
+  if (shortfall) {
+    items.push({
+      cls: "danger", ic: "rupee",
+      t: `${money(onCredit)} sold on credit is not on the customers`,
+      s: `Only ${money(sum(dues, (d) => d.outstanding))} is on record - open Customers and recheck`,
+      go: "#/customers"
+    });
+  }
   const stockGo = (f) => (can("inventory.view") ? `#/inventory?filter=${f}` : `#/products?filter=${f}`);
   if (out.length) items.push({ cls: "danger", ic: "alert", t: `${out.length} product${out.length > 1 ? "s" : ""} out of stock`, s: out.slice(0, 3).map((p) => p.productName).join(", "), go: stockGo("out") });
   if (low.length) items.push({ cls: "warn", ic: "alert", t: `${low.length} product${low.length > 1 ? "s" : ""} running low`, s: low.slice(0, 3).map((p) => `${p.productName} (${p.stock})`).join(", "), go: stockGo("low") });

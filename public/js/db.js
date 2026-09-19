@@ -386,16 +386,96 @@ export const getActor = () => actor;
  * entry must never stop a sale going through.
  * When a batch is passed the entry rides along with it.
  */
-export function logActivity(action, detail = "", entity = "", entityId = "", batch = null) {
+export function logActivity(action, detail = "", entity = "", entityId = "", batch = null, extra = null) {
   const r = newRef(C.activity);
   const payload = {
     action, entity, entityId, detail,
+    // Money that moved is stored as a number as well as in the wording, so a
+    // later recount does not have to read the sentence back.
+    ...(extra || {}),
     userId: actor.uid, userName: actor.name,
     ...stamps()
   };
   if (batch) batch.set(r, payload);
   else setDoc(r, payload).catch(() => {});
   return r.id;
+}
+
+/* ============================================================
+   Putting the customer dues right
+   ------------------------------------------------------------
+   Every customer carries a running pending amount, moved a step
+   at a time as bills, collections and returns happen. A step
+   that never landed - a till that was offline when the bill was
+   saved, a bill written before this was counted - leaves the
+   total wrong for good, because nothing ever recounts it.
+
+   This recounts it: the pending amount is rebuilt from the only
+   things that are allowed to change it.
+
+       bills left unpaid      what was sold on credit
+     - money collected        payments recorded since
+     - credit-note returns    goods taken back against the dues
+     + uncollected exchange   an exchange difference not yet paid
+
+   Cancelled bills are left out, as cancelling one already takes
+   its due away.
+   ============================================================ */
+
+/** The rupees a logged payment moved, from the field or from its wording. */
+function loggedAmount(a) {
+  const direct = toNum(a.amount);
+  if (direct > 0) return direct;
+  const m = String(a.detail || "").match(/₹\s*([\d,]+(?:\.\d+)?)/);
+  return m ? toNum(m[1].replace(/,/g, "")) : 0;
+}
+
+export async function recalcCustomerDues() {
+  // Read everything first. If any of these is refused the count would come
+  // out short, and a short count writes a wrong figure, so nothing is caught
+  // here - the caller is told instead.
+  const [sales, returns, payments, customers] = await Promise.all([
+    listDocs(C.sales, { limit: 5000 }),
+    listDocs(C.returns, { limit: 2000 }),
+    listDocs(C.activity, { where: [["action", "==", "PAYMENT_RECEIVED"]], limit: 5000 }),
+    listDocs(C.customers, { limit: 5000 })
+  ]);
+
+  const tally = {};
+  const add = (id, n) => { if (id && n) tally[id] = round2((tally[id] || 0) + n); };
+
+  sales.forEach((s) => {
+    if (s.status === "cancelled") return;
+    add(s.customerId, Math.max(0, round2(toNum(s.grandTotal) - toNum(s.amountReceived))));
+  });
+  returns.forEach((r) => {
+    if (r.mode === "credit") add(r.customerId, -toNum(r.refundAmount));
+    if (r.type === "EXCHANGE" && r.collected === false) add(r.customerId, toNum(r.differenceAmount));
+  });
+  payments.forEach((p) => add(p.entityId, -loggedAmount(p)));
+
+  const fixes = customers
+    .map((c) => ({ id: c.id, name: c.name, was: round2(toNum(c.outstanding)), now: Math.max(0, round2(tally[c.id] || 0)) }))
+    .filter((f) => Math.abs(f.now - f.was) >= 0.01);
+
+  // A batch holds 500 writes, so a big day is sent in several.
+  for (let i = 0; i < fixes.length; i += 400) {
+    const batch = writeBatch(db);
+    fixes.slice(i, i + 400).forEach((f) => {
+      batch.update(ref(C.customers, f.id), { outstanding: f.now, updatedAt: serverTimestamp() });
+    });
+    await settle(batch.commit());
+  }
+  if (fixes.length) {
+    logActivity("DUES_RECALCULATED", `${fixes.length} of ${customers.length} customers corrected`, "customer", "");
+    changed(C.customers);
+  }
+  return {
+    checked: customers.length,
+    fixed: fixes.length,
+    total: round2(fixes.reduce((a, f) => a + f.now, 0)),
+    rows: fixes.slice(0, 20)
+  };
 }
 
 /* ============================================================

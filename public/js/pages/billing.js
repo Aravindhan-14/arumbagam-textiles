@@ -429,7 +429,7 @@ function paymentSheet(b, onDone, go) {
         balLabel.textContent = diff >= 0 ? "Change to return" : "Balance due";
         balEl.textContent = money(Math.abs(diff));
         balEl.style.color = diff < 0 ? "var(--danger)" : "var(--ok)";
-        statusEl.textContent = statusOf(received, b.grandTotal, method);
+        statusEl.textContent = statusOf(received, b.grandTotal);
       };
       recv.oninput = refresh; refresh();
 
@@ -449,7 +449,7 @@ function paymentSheet(b, onDone, go) {
         const box = a.root.querySelector("#pm-err");
         const fail = (m) => { box.textContent = m; box.classList.remove("hidden"); };
         box.classList.add("hidden");
-        const status = statusOf(received, b.grandTotal, method);
+        const status = statusOf(received, b.grandTotal);
         if (status !== "paid" && !customer) return fail("Attach a customer before saving a credit or part-paid bill.");
         await saveBill(b, { method, received, status }, a, onDone, go);
       };
@@ -457,9 +457,15 @@ function paymentSheet(b, onDone, go) {
   });
 }
 
-const statusOf = (received, total, method) => {
-  if (method === "Credit" || received <= 0) return "credit";
+/**
+ * What is owed decides the status, never the button that was pressed. Picking
+ * Credit empties the amount, so it lands here as nothing received; but if an
+ * amount is then typed, the bill is part-paid or paid, and calling it credit
+ * would put a due on the customer that the figures do not back up.
+ */
+const statusOf = (received, total) => {
   if (received >= total - 0.009) return "paid";
+  if (received <= 0) return "credit";
   return "partial";
 };
 

@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    VYRA SAREES - service worker
    ------------------------------------------------------------
    Caches the app shell so the phone opens instantly and keeps
@@ -6,7 +6,7 @@
    never touched here - the Firestore SDK has its own on-device
    cache and replays writes made while offline.
    ============================================================ */
-const VERSION = "vyra-v7-labels";
+const VERSION = "vyra-v12-search";
 const SHELL = [
   "./",
   "./index.html",
@@ -88,8 +88,24 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Static assets: cache first, refresh in the background.
-  if (sameOrigin || /cdnjs\.cloudflare\.com|www\.gstatic\.com/.test(url.hostname)) {
+  // The app's own files: network first, so a change made on the shop PC shows
+  // up on the very next reload. The cache answers only when the network does
+  // not, which is what keeps the phone working with the Wi-Fi gone.
+  if (sameOrigin) {
+    e.respondWith(
+      fetch(req).then((r) => {
+        if (r && r.status === 200) {
+          const copy = r.clone();
+          caches.open(VERSION).then((c) => c.put(req, copy));
+        }
+        return r;
+      }).catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // The two libraries: cache first, they never change under a fixed version.
+  if (/cdnjs\.cloudflare\.com|www\.gstatic\.com/.test(url.hostname)) {
     e.respondWith(
       caches.match(req).then((hit) => {
         const net = fetch(req).then((r) => {

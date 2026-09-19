@@ -39,6 +39,20 @@ export const icon = (name, cls = "") =>
 
 /* ---------- toast ---------- */
 let toastHost;
+/**
+ * A screen that redraws itself on every keystroke throws away the very box
+ * being typed into, and the cursor goes with it - on a phone the keyboard
+ * drops too, so only the first letter ever lands. Call this after the redraw
+ * to put the cursor back at the end of that box.
+ */
+export function refocus(root, selector) {
+  const el = root.querySelector(selector);
+  if (!el || el === document.activeElement) return;
+  el.focus({ preventScroll: true });
+  const end = String(el.value || "").length;
+  try { el.setSelectionRange(end, end); } catch { /* not a text field */ }
+}
+
 export function toast(msg, type = "", ms = 2600) {
   toastHost = toastHost || document.getElementById("toast-host");
   const el = document.createElement("div");

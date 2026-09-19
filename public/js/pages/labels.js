@@ -194,9 +194,9 @@ function preview(picked, type) {
         const html = `<style>
             body{font-family:Arial,sans-serif}
             .sheet{display:grid;grid-template-columns:repeat(4,1fr);gap:4mm}
-            .cell{border:1px dashed #999;border-radius:2mm;padding:2mm;text-align:center;page-break-inside:avoid}
+            .cell{border:1px dashed #999;border-radius:2mm;padding:2mm 4mm;text-align:center;page-break-inside:avoid}
             .cell .nm{font-size:8pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-            .cell .sk{font-size:7pt;font-family:monospace} .cell .pr{font-size:9pt;font-weight:700}
+            .cell .sk{font-size:9pt;font-family:monospace;font-weight:700;color:#000} .cell .pr{font-size:9pt;font-weight:700}
             img{max-width:100%}
           </style><div class="sheet">${
           [...api.root.querySelectorAll(".label-cell")].map((c) => {

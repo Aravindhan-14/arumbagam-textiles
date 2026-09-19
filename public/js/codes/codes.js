@@ -73,7 +73,11 @@ export function barcodeCanvas(value, opts = {}) {
       height: opts.height || 60,
       displayValue: opts.displayValue !== false,
       fontSize: opts.fontSize || 14,
-      textMargin: 2,
+      // JsBarcode builds its font as "<fontOptions> <size>px <font>", so a
+      // weight passed here is what keeps the code under the bars thin.
+      fontOptions: opts.fontOptions || "",
+      font: opts.font || "monospace",
+      textMargin: opts.textMargin ?? 2,
       margin: opts.margin ?? 6,
       background: "#ffffff",
       lineColor: "#000000"
@@ -122,7 +126,11 @@ export async function hydrateCodeSlots(root, size = 90) {
     const value = slot.dataset.value;
     try {
       const c = slot.dataset.type === "barcode"
-        ? barcodeCanvas(value, { height: 44, width: 1.6, fontSize: 11, margin: 2 })
+        ? barcodeCanvas(value, {
+          height: 44, width: 1.6, margin: 2,
+          // Bars as they were; only the code under them is made lighter.
+          fontSize: 10, fontOptions: "300", font: '"Segoe UI Light","Segoe UI",Arial,sans-serif', textMargin: 3
+        })
         : await qrCanvas(value, size);
       c.style.maxWidth = "100%"; c.style.height = "auto";
       slot.innerHTML = ""; slot.appendChild(c);
