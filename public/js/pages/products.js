@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Products
+   demo SAREES - Products
    ============================================================ */
 import { state, on, searchProducts, can, canSeeCost, costOf, costSupplier, costsStatus, findByCode } from "../store.js";
 import { C, updateDocById, removeDoc, removeCost, logActivity } from "../db.js";
@@ -90,7 +90,7 @@ export async function mount(view, { params, go }) {
   if (labelsBtn) labelsBtn.onclick = () => go("#/labels");
   view.querySelector("#pr-export").onclick = () => {
     const list = searchProducts(q, filter);
-    download(`vyra-products-${Date.now()}.csv`, toCsv(list, [
+    download(`demo-products-${Date.now()}.csv`, toCsv(list, [
       { label: "SKU", key: "sku" }, { label: "Product", key: "productName" },
       { label: "Category", key: "categoryName" }, { label: "Colour", key: "colour" },
       { label: "Size", key: "size" }, { label: "Fabric", key: "fabric" },
@@ -214,8 +214,8 @@ export function openProductSheet(id, onChange, go) {
       };
       root.querySelector("#ps-bill").onclick = () => {
         api.close();
-        sessionStorage.setItem("vyra.pendingScan", qrPayload(p));
-        (go || window.VYRA.go)("#/billing");
+        sessionStorage.setItem("demo.pendingScan", qrPayload(p));
+        (go || window.demo.go)("#/billing");
       };
       // The owner's own figures: tapping either one opens the editor that
       // holds them, so a blank is one tap from being filled in.

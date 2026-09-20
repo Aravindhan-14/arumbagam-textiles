@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Purchases (stock in from suppliers)
+   demo SAREES - Purchases (stock in from suppliers)
    ============================================================ */
 import { state, can, costOf, findByCode, supplierById } from "../store.js";
 import { C, queryRange, recent, createPurchase, nextPurchaseNumber } from "../db.js";
@@ -63,7 +63,7 @@ async function listPurchases(view, go) {
   };
   const ex = view.querySelector("#pu-export");
   if (ex) ex.onclick = () => {
-    download(`vyra-purchases-${Date.now()}.csv`, toCsv(rows, [
+    download(`demo-purchases-${Date.now()}.csv`, toCsv(rows, [
       { label: "Number", key: "purchaseNumber" }, { label: "Date", get: (r) => fmtDate(r.createdAt) },
       { label: "Supplier", key: "supplierName" }, { label: "Invoice ref", key: "invoiceRef" },
       { label: "Items", get: (r) => (r.items || []).length },

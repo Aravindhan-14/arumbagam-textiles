@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Reports
+   demo SAREES - Reports
    ============================================================ */
 import { state, can, canSeeCost, costOf, lowStockProducts, outOfStockProducts, stockValue, totalStockUnits } from "../store.js";
 import { C, queryRange } from "../db.js";
@@ -358,6 +358,6 @@ function exportTab(tab, { sales, purchases, from, to }) {
       ...(canSeeCost() ? [{ label: "Cost", get: (i) => costOf(i.productId) }] : [])
     ];
   }
-  download(`vyra-${name}-${stamp}.csv`, toCsv(rows, headers));
+  download(`demo-${name}-${stamp}.csv`, toCsv(rows, headers));
   ok("Report exported");
 }

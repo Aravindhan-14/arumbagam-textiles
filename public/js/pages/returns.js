@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Returns & Exchange
+   demo SAREES - Returns & Exchange
    ============================================================ */
 import { state, can, productById, findByCode } from "../store.js";
 import { C, listDocs, getDocById, createReturn, nextReturnNumber, queryRange } from "../db.js";

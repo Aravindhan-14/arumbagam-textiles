@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Firebase configuration
+   demo SAREES - Firebase configuration
    ------------------------------------------------------------
    These values come from the Firebase console:
    Project settings > Your apps > Web app > SDK setup and
@@ -11,13 +11,13 @@
    ============================================================ */
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyDABOdRUV6taJ1bV1P63nRiLGG6ScIG9yM",
-  authDomain: "vyra-sarees.firebaseapp.com",
-  projectId: "vyra-sarees",
-  storageBucket: "vyra-sarees.firebasestorage.app",
-  messagingSenderId: "76685008008",
-  appId: "1:76685008008:web:e1ab3f58290f103881d33d",
-  measurementId: "G-3YMVTQYG1M"
+  apiKey: "AIzaSyCXFhzRJpvJTMvEliiBUYIP_UBV1C_wpr8",
+  authDomain: "simple-pos-app-aa312.firebaseapp.com",
+  projectId: "simple-pos-app-aa312",
+  storageBucket: "simple-pos-app-aa312.firebasestorage.app",
+  messagingSenderId: "1015316530659",
+  appId: "1:1015316530659:web:ca934ea69b6b309d7f4cd6",
+  measurementId: "G-L2W7YM44XN"
 };
 
 /* Firebase JS SDK pulled from Google's CDN, so the app stays a

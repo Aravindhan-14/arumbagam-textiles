@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Suppliers
+   demo SAREES - Suppliers
    ============================================================ */
 import { state, on, searchSuppliers, can } from "../store.js";
 import { C, listDocs, updateDocById, incr, logActivity } from "../db.js";
@@ -43,7 +43,7 @@ export async function mount(view, { go }) {
       li.onclick = () => supplierSheet(state.suppliers.find((s) => s.id === li.dataset.id), paint, go);
     });
     view.querySelector("#su-export").onclick = () => {
-      download(`vyra-suppliers-${Date.now()}.csv`, toCsv(state.suppliers, [
+      download(`demo-suppliers-${Date.now()}.csv`, toCsv(state.suppliers, [
         { label: "Name", key: "name" }, { label: "Mobile", key: "mobile" }, { label: "Email", key: "email" },
         { label: "GSTIN", key: "gstin" }, { label: "Address", key: "address" },
         { label: "Products", key: "productsSupplied" },

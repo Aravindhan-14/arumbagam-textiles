@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - paper documents drawn as artwork
+   demo SAREES - paper documents drawn as artwork
    ------------------------------------------------------------
    A label printer such as the TVS LP 46 Lite does not understand
    ESC/POS, so a bill cannot simply be a stream of receipt codes.

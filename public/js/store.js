@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - live local cache
+   demo SAREES - live local cache
    ------------------------------------------------------------
    Master data (products, categories, customers, suppliers) is
    mirrored locally. Everything the UI searches runs against this
@@ -112,7 +112,7 @@ export const costOf = (productId) => (canSeeCost() ? toNum(state.costs[productId
 /** The supplier we last bought this product from. Owner only. */
 export const costSupplier = (productId) => (canSeeCost() ? (state.costs[productId]?.supplierName || "") : "");
 
-const CACHE_KEY = "vyra.cache";
+const CACHE_KEY = "demo.cache";
 
 function readCache() {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "{}"); } catch { return {}; }
@@ -198,13 +198,13 @@ export async function startStore(user) {
     const name = e.detail?.collection;
     if (name === C.productCosts) refreshCosts();
   };
-  window.addEventListener("vyra:changed", changeHandler);
+  window.addEventListener("demo:changed", changeHandler);
 }
 
 export function stopStore() {
   stops.forEach((off) => { try { off(); } catch { /* already gone */ } });
   stops = [];
-  if (changeHandler) { window.removeEventListener("vyra:changed", changeHandler); changeHandler = null; }
+  if (changeHandler) { window.removeEventListener("demo:changed", changeHandler); changeHandler = null; }
   Object.keys(state.ready).forEach((k) => { state.ready[k] = false; });
   state.products = []; state.categories = []; state.customers = []; state.suppliers = [];
   state.costs = {}; state.costsLoaded = false; state.costsError = "";

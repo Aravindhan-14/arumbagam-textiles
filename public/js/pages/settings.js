@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Business settings
+   demo SAREES - Business settings
    ============================================================ */
 import { state, can, isAdmin, costsStatus, refreshCosts } from "../store.js";
 import { saveSettings, uploadImage, DEFAULT_SETTINGS, peekBlockSize, ensureBlocks, logActivity } from "../db.js";
@@ -205,7 +205,7 @@ export async function mount(view, { go }) {
     </div>
 
     ${editable ? `<button class="btn btn-primary btn-block btn-lg mt" id="se-save">${icon("check")} Save Settings</button>` : ""}
-    <div class="small muted tc mt">VYRA SAREES · Boutique Billing &amp; Inventory · v1.0</div>`;
+    <div class="small muted tc mt">demo SAREES · Boutique Billing &amp; Inventory · v1.0</div>`;
 
   /* ---------- wiring ---------- */
   view.querySelector("#se-printmode").value = printerMode();
@@ -223,7 +223,7 @@ export async function mount(view, { go }) {
       busy(true, "Printing…");
       await printLabels([{
         product: {
-          id: "test", productName: s.businessName || "VYRA SAREES",
+          id: "test", productName: s.businessName || "demo SAREES",
           sku: "TEST-1234", barcode: "TEST-1234", sellingPrice: 999,
           colour: "Test", size: "-"
         },
@@ -270,7 +270,7 @@ export async function mount(view, { go }) {
     try {
       if (usesBrowserPrint()) {
         printHtmlFallback(
-          `<div class="c big">${esc(fieldVal("businessName", s.businessName) || "VYRA SAREES")}</div>
+          `<div class="c big">${esc(fieldVal("businessName", s.businessName) || "demo SAREES")}</div>
            <div class="c">${esc(fieldVal("businessType", s.businessType))}</div><hr>
            <table><tr><td>Test</td><td class="r">OK</td></tr></table><hr>
            <div class="c">${esc(fieldVal("footerMessage", s.footerMessage) || "Thank you")}</div>`,
@@ -278,7 +278,7 @@ export async function mount(view, { go }) {
         ok("Print preview opened"); return;
       }
       const p = newReceiptDoc({ ...s, printerWidth: toNum(fieldVal("printerWidth", s.printerWidth), 58) });
-      p.align("center").bold(true).size(2, 2).line(fieldVal("businessName", s.businessName) || "VYRA SAREES")
+      p.align("center").bold(true).size(2, 2).line(fieldVal("businessName", s.businessName) || "demo SAREES")
         .size(1, 1).bold(false).line(fieldVal("businessType", s.businessType))
         .rule().align("left").lr("Test", "OK").rule()
         .align("center").line(fieldVal("footerMessage", s.footerMessage) || "Thank you").feed(2).cut();
@@ -342,7 +342,7 @@ export async function mount(view, { go }) {
     try {
       busy(true, "Saving…");
       const patch = {
-        businessName: d.businessName.trim() || "VYRA SAREES",
+        businessName: d.businessName.trim() || "demo SAREES",
         businessType: d.businessType.trim(),
         address: d.address.trim(), mobile: d.mobile.trim(), email: d.email.trim(),
         gstEnabled: !!d.gstEnabled, gstin: upper(d.gstin),

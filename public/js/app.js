@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - application shell, router and hardware panel
+   demo SAREES - application shell, router and hardware panel
    ============================================================ */
 import { watchAuth, login, logout, authMessage, startSession, resetPassword } from "./auth.js";
 import { state, on, can, isAdmin } from "./store.js";
@@ -109,7 +109,7 @@ async function route() {
     const res = await mod.mount(view, { sub, params, go });
     if (typeof res === "function") currentCleanup = res;
     else if (res && typeof res.cleanup === "function") currentCleanup = res.cleanup;
-    setTitle(mod.title || item?.label || "VYRA SAREES", (res && res.sub) || mod.subtitle || "");
+    setTitle(mod.title || item?.label || "demo SAREES", (res && res.sub) || mod.subtitle || "");
   } catch (e) {
     console.error(e);
     view.innerHTML = `<div class="empty">${icon("alert")}<b>Could not open this page</b><small>${esc(e.message || "")}</small></div>`;
@@ -120,7 +120,7 @@ async function route() {
 
 function setTitle(t, s) {
   document.getElementById("page-title").textContent = t;
-  document.getElementById("page-sub").textContent = s || state.settings?.businessName || "VYRA SAREES";
+  document.getElementById("page-sub").textContent = s || state.settings?.businessName || "demo SAREES";
 }
 
 /* ============================================================
@@ -192,7 +192,7 @@ function hardwareSheet() {
           <button class="btn btn-primary" id="hw-connect">${icon("print")} Find printers</button>
           <button class="btn btn-soft" id="hw-test">Test print</button>
         </div>
-        ${wired ? "" : `<p class="form-note mt">Wired printing needs the app opened on the billing PC, from the window that <b>START VYRA SAREES</b> starts. Plug the printer in by USB, install its Windows driver, then tap <b>Find printers</b>.</p>`}
+        ${wired ? "" : `<p class="form-note mt">Wired printing needs the app opened on the billing PC, from the window that <b>START demo SAREES</b> starts. Plug the printer in by USB, install its Windows driver, then tap <b>Find printers</b>.</p>`}
       </div>
 
       <div class="card">
@@ -235,12 +235,12 @@ function hardwareSheet() {
       try {
         busy(true, "Printing…");
         const p = newReceiptDoc(state.settings || {});
-        p.align("center").bold(true).size(2, 2).line("VYRA SAREES").size(1, 1).bold(false)
+        p.align("center").bold(true).size(2, 2).line("demo SAREES").size(1, 1).bold(false)
           .line("Printer test").rule().align("left")
           .lr("Paper", (state.settings?.printerWidth || 58) + "mm")
           .lr("Mode", printerMode())
           .lr("Printer", receiptPrinter() || "-")
-          .rule().align("center").qr("VYRA-SAREES-TEST", 6).feed(1).line("Test successful").cut();
+          .rule().align("center").qr("demo-SAREES-TEST", 6).feed(1).line("Test successful").cut();
         await sendDoc(p); ok("Test sent to printer");
       } catch (e) { err(e.message); } finally { busy(false); }
     };
@@ -355,7 +355,7 @@ document.getElementById("scrim").onclick = closeDrawer;
 document.getElementById("hw-btn").onclick = hardwareSheet;
 document.getElementById("scan-top-btn").onclick = () => go("#/scan");
 document.getElementById("logout-btn").onclick = async () => {
-  if (await confirmDialog("Log out of VYRA SAREES?", { okText: "Logout", danger: true })) await logout();
+  if (await confirmDialog("Log out of demo SAREES?", { okText: "Logout", danger: true })) await logout();
 };
 
 window.addEventListener("hashchange", route);
@@ -379,4 +379,4 @@ paintNet(navigator.onLine);
 watchAuth((user, reason) => { if (user) showApp(user); else showLogin(reason); });
 
 /* Expose a few helpers for pages that prefer the global. */
-window.VYRA = { go, toast, ok, err, warn };
+window.demo = { go, toast, ok, err, warn };

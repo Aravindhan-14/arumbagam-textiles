@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Billing / POS
+   demo SAREES - Billing / POS
    ============================================================ */
 import { state, findByCode, searchProducts, can, customerById } from "../store.js";
 import { createSale, nextInvoiceNumber, peekBlockSize } from "../db.js";
@@ -15,7 +15,7 @@ import { printSale, receiptHtml } from "../hw/documents.js";
 
 export const title = "New Bill";
 
-const CART_KEY = "vyra.cart";
+const CART_KEY = "demo.cart";
 const PAYMENT_METHODS = ["Cash", "UPI", "Card", "Bank Transfer", "Credit", "Other"];
 
 let cart = [];
@@ -254,8 +254,8 @@ export async function mount(view, { go }) {
   });
 
   /* a product opened from elsewhere can queue itself into the bill */
-  const pending = sessionStorage.getItem("vyra.pendingScan");
-  if (pending) { sessionStorage.removeItem("vyra.pendingScan"); const p = findByCode(pending); if (p) addProduct(p); }
+  const pending = sessionStorage.getItem("demo.pendingScan");
+  if (pending) { sessionStorage.removeItem("demo.pendingScan"); const p = findByCode(pending); if (p) addProduct(p); }
 
   paint();
   return () => { saveCart(); };
@@ -553,14 +553,14 @@ export function afterSaleSheet(sale, settings, go) {
         if (navigator.share) { try { await navigator.share({ title: sale.invoiceNumber, text }); } catch {} }
         else { await navigator.clipboard.writeText(text); ok("Bill copied to clipboard"); }
       };
-      a.root.querySelector("#as-new").onclick = () => { a.close(); (go || window.VYRA.go)("#/billing"); };
+      a.root.querySelector("#as-new").onclick = () => { a.close(); (go || window.demo.go)("#/billing"); };
     }
   });
 }
 
 function plainReceipt(sale, settings) {
   const lines = [
-    settings.businessName || "VYRA SAREES",
+    settings.businessName || "demo SAREES",
     settings.address || "", settings.mobile ? "Ph: " + settings.mobile : "", "",
     `Invoice: ${sale.invoiceNumber}`,
     `Date: ${fmtDate(sale.createdAt)} ${fmtTime(sale.createdAt)}`,

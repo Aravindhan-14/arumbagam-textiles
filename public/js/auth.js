@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - authentication & session
+   demo SAREES - authentication & session
    ------------------------------------------------------------
    Firebase Auth holds the session, so reopening the app on the
    phone does not ask for the password again. Who a person is
@@ -59,7 +59,7 @@ export async function loadProfile(fbUser) {
 
   if (!isFirst) {
     const e = new Error("no-profile");
-    e.code = "vyra/no-profile";
+    e.code = "demo/no-profile";
     throw e;
   }
 
@@ -89,16 +89,16 @@ export async function login(email, password) {
     if ((profile.status || "active") !== "active") {
       await signOut(auth);
       const e = new Error("This account is not active yet. Ask the shop owner to activate it.");
-      e.code = "vyra/inactive";
+      e.code = "demo/inactive";
       throw e;
     }
     return profile;
   } catch (e) {
     signingIn = false;
-    if (e?.code === "vyra/no-profile") {
+    if (e?.code === "demo/no-profile") {
       await signOut(auth).catch(() => {});
       const x = new Error("This account has not been set up for the shop yet. Ask the owner to add you under Staff.");
-      x.code = "vyra/no-profile";
+      x.code = "demo/no-profile";
       throw x;
     }
     throw e;
@@ -153,7 +153,7 @@ export function watchAuth(onReady) {
       await begin(profile, onReady, "resumed");
     } catch (e) {
       console.error("profile load failed", e);
-      if (e?.code === "vyra/no-profile") {
+      if (e?.code === "demo/no-profile") {
         await signOut(auth).catch(() => {});
         onReady(null, "error:This account has not been set up for the shop yet.");
         return;

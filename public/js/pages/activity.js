@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Activity / audit log
+   demo SAREES - Activity / audit log
    ============================================================ */
 import { can } from "../store.js";
 import { C, listDocs } from "../db.js";
@@ -73,7 +73,7 @@ export async function mount(view, { go }) {
   view.querySelector("#ac-q").oninput = debounce((e) => { q = e.target.value.trim(); paint(); }, 150);
   view.querySelector("#ac-more").onclick = () => { if (!done) load(); };
   view.querySelector("#ac-export").onclick = () => {
-    download(`vyra-activity-${Date.now()}.csv`, toCsv(rows, [
+    download(`demo-activity-${Date.now()}.csv`, toCsv(rows, [
       { label: "When", get: (r) => fmtDateTime(r.createdAt) },
       { label: "Action", get: (r) => LABEL[r.action] || r.action },
       { label: "Detail", key: "detail" }, { label: "User", key: "userName" },

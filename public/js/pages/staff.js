@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Staff & access control
+   demo SAREES - Staff & access control
    ============================================================ */
 import { state, can, isAdmin } from "../store.js";
 import { listUsers, createUser, updateUser, sendStaffPasswordReset } from "../db.js";
@@ -198,6 +198,6 @@ function staffSheet(u, onDone) {
 }
 
 function suggestPassword() {
-  const words = ["Saree", "Silk", "Vyra", "Kurti", "Boutique"];
+  const words = ["Saree", "Silk", "demo", "Kurti", "Boutique"];
   return words[Math.floor(Math.random() * words.length)] + Math.floor(1000 + Math.random() * 9000);
 }

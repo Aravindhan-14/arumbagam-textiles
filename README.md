@@ -1,4 +1,4 @@
-# VYRA SAREES — Boutique Billing, Inventory & Sales Management
+# demo SAREES — Boutique Billing, Inventory & Sales Management
 
 A mobile-first web application for the day-to-day running of a saree and boutique shop:
 products, stock, QR/barcode labels, billing on the phone, wired USB printing of bills
@@ -19,7 +19,7 @@ printer, or both) plug into the PC by USB; the scanner is an HID keyboard-wedge.
 ## 1. Quick start
 
 ```bash
-# 1. In the Firebase console for project "vyra-sarees":
+# 1. In the Firebase console for project "demo-sarees":
 #      Authentication -> Email/Password -> Enable
 #      Firestore Database -> Create
 #      Storage -> Get started            (photos only; optional)
@@ -33,14 +33,14 @@ firebase deploy --only firestore:rules,firestore:indexes,storage
 node tools/serve.js                 # http://localhost:5000
 ```
 
-Or double-click **`START VYRA SAREES.bat`**, which does the last step and opens the
+Or double-click **`START demo SAREES.bat`**, which does the last step and opens the
 browser for you.
 
 Create the owner's login in **Authentication → Users → Add user**, sign in with it, and
 save Settings — the first account to log in on an unconfigured project becomes the
 administrator. Everybody else is added from **Staff**.
 
-`firebase deploy --only hosting` publishes the app to `https://vyra-sarees.web.app`, and
+`firebase deploy --only hosting` publishes the app to `https://demo-sarees.web.app`, and
 then no PC in the shop needs to be running at all.
 
 Full step-by-step instructions are in **[SETUP.md](SETUP.md)**.
@@ -277,7 +277,7 @@ Nothing needs pairing, and no printer needs Bluetooth — the TVS LP 46 Lite has
 
 ```
 firebase.json               hosting, rules and emulator configuration
-.firebaserc                 the project this deploys to (vyra-sarees)
+.firebaserc                 the project this deploys to (demo-sarees)
 firestore.rules             who may read and write what - the real access control
 firestore.indexes.json      composite indexes the reports need
 storage.rules               product photos and the shop logo
@@ -311,7 +311,7 @@ public/
 ## 8. Things worth knowing
 
 * **Nothing in the shop has to be running.** Deploy to Firebase Hosting and the app is
-  a URL; `START VYRA SAREES.bat` is only for running it off the shop PC.
+  a URL; `START demo SAREES.bat` is only for running it off the shop PC.
 * **The rules are the security.** The Firebase `apiKey` in `firebase-config.js` is not a
   secret — it only names the project. Re-run
   `firebase deploy --only firestore:rules,storage` after any rules change.

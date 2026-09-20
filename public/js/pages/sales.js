@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Sales history
+   demo SAREES - Sales history
    ============================================================ */
 import { state, can, canSeeCost, costOf } from "../store.js";
 import { C, queryRange, cancelSale, getDocById } from "../db.js";
@@ -118,7 +118,7 @@ export async function mount(view, { params, go }) {
   };
   view.querySelector("#sl-q").oninput = debounce((e) => { q = e.target.value.trim(); paint(); }, 150);
   view.querySelector("#sl-export").onclick = () => {
-    download(`vyra-sales-${dateInput(from)}_${dateInput(to)}.csv`, toCsv(sales, [
+    download(`demo-sales-${dateInput(from)}_${dateInput(to)}.csv`, toCsv(sales, [
       { label: "Invoice", key: "invoiceNumber" },
       { label: "Date", get: (s) => fmtDateTime(s.createdAt) },
       { label: "Customer", key: "customerName" }, { label: "Mobile", key: "customerMobile" },
@@ -214,14 +214,14 @@ export function openBill(sale, onChange, go) {
       api.body.appendChild(extra);
 
       extra.querySelector("#bs-share").onclick = async () => {
-        const text = `${settings.businessName || "VYRA SAREES"}\n${sale.invoiceNumber}\n${fmtDateTime(sale.createdAt)}\n\n` +
+        const text = `${settings.businessName || "demo SAREES"}\n${sale.invoiceNumber}\n${fmtDateTime(sale.createdAt)}\n\n` +
           (sale.items || []).map((i) => `${i.productName} x${i.qty}  ₹${num(i.netAmount ?? i.amount)}`).join("\n") +
           `\n\nTotal: ₹${num(sale.grandTotal)}\n${settings.footerMessage || ""}`;
         if (navigator.share) { try { await navigator.share({ title: sale.invoiceNumber, text }); } catch {} }
         else { await navigator.clipboard.writeText(text); ok("Copied"); }
       };
       const rb = extra.querySelector("#bs-return");
-      if (rb) rb.onclick = () => { api.close(); (go || window.VYRA.go)(`#/returns?sale=${sale.id}`); };
+      if (rb) rb.onclick = () => { api.close(); (go || window.demo.go)(`#/returns?sale=${sale.id}`); };
       const cb = extra.querySelector("#bs-cancel");
       if (cb) cb.onclick = async () => {
         if (!await confirmDialog(`Cancel ${sale.invoiceNumber}? Stock will be returned and the sale reversed.`,

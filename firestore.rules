@@ -1,7 +1,7 @@
 rules_version = '2';
 
 /* ============================================================
-   VYRA SAREES - Firestore security rules
+   demo SAREES - Firestore security rules
    ------------------------------------------------------------
    Everyone who reaches the data must be a signed-in user whose
    users/{uid} profile exists and is active. Admins have full

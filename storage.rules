@@ -1,7 +1,7 @@
 rules_version = '2';
 
 /* ============================================================
-   VYRA SAREES - Cloud Storage rules
+   demo SAREES - Cloud Storage rules
    Product photos and the shop logo. Signed-in staff may upload
    images up to 5 MB; nothing else is writable.
    ============================================================ */

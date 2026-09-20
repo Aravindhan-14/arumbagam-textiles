@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - shared page components
+   demo SAREES - shared page components
    (pickers, product / customer / supplier editors)
    ============================================================ */
 import {

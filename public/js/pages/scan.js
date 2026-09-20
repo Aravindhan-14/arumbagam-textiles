@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Scan screen
+   demo SAREES - Scan screen
    ------------------------------------------------------------
    Primary input is the Bluetooth HID scanner. The camera is a
    full fallback (see js/hw/camera.js) and manual entry is always
@@ -150,7 +150,7 @@ export async function mount(view, { params, go }) {
     resultEl.querySelector("#sc-detail").onclick = () => openProductSheet(p.id, () => {}, go);
     const add = resultEl.querySelector("#sc-add");
     if (add) add.onclick = () => {
-      sessionStorage.setItem("vyra.pendingScan", p.barcode || p.sku || p.id);
+      sessionStorage.setItem("demo.pendingScan", p.barcode || p.sku || p.id);
       go("#/billing");
     };
     // The camera fills the screen, so bring the result into view on a hit.

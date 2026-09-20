@@ -1,5 +1,5 @@
 <#
-    VYRA SAREES - Windows print helper
+    demo SAREES - Windows print helper
     ------------------------------------------------------------
     Called by tools/serve.js so the browser can print straight to
     the USB printer (TVS LP 46 Lite and friends) with no dialog.
@@ -55,7 +55,7 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 
-public class VyraRawPrinter
+public class demoRawPrinter
 {
   [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
   public class DOCINFOW
@@ -116,7 +116,7 @@ public class VyraRawPrinter
 '@
       $n = [Math]::Max(1, $Copies)
       for ($i = 0; $i -lt $n; $i++) {
-        [VyraRawPrinter]::SendFile($Printer, $File, 'VYRA SAREES')
+        [demoRawPrinter]::SendFile($Printer, $File, 'demo SAREES')
       }
       Write-Result @{ ok = $true; printer = $Printer; copies = $n }
     }
@@ -127,25 +127,25 @@ public class VyraRawPrinter
       # A whole run of stickers arrives as a manifest - one page per line,
       # "<copies><tab><png path>" - so a hundred labels are one spooled job
       # instead of a hundred.
-      $script:vyraPages = @()
+      $script:demoPages = @()
       if ($Manifest) {
         if (-not (Test-Path -LiteralPath $Manifest)) { throw "Job list not found: $Manifest" }
         foreach ($row in (Get-Content -LiteralPath $Manifest)) {
           if (-not $row.Trim()) { continue }
           $bits = $row -split "`t", 2
           if ($bits.Count -lt 2) { continue }
-          $script:vyraPages += [pscustomobject]@{ Copies = [Math]::Max(1, [int]$bits[0]); Path = $bits[1] }
+          $script:demoPages += [pscustomobject]@{ Copies = [Math]::Max(1, [int]$bits[0]); Path = $bits[1] }
         }
       }
       elseif (Test-Path -LiteralPath $File) {
-        $script:vyraPages += [pscustomobject]@{ Copies = [Math]::Max(1, $Copies); Path = $File }
+        $script:demoPages += [pscustomobject]@{ Copies = [Math]::Max(1, $Copies); Path = $File }
       }
-      if (-not $script:vyraPages.Count) { throw 'The print job had no pages in it.' }
+      if (-not $script:demoPages.Count) { throw 'The print job had no pages in it.' }
 
       Add-Type -AssemblyName System.Drawing
 
       $doc = New-Object System.Drawing.Printing.PrintDocument
-      $doc.DocumentName = 'VYRA SAREES'
+      $doc.DocumentName = 'demo SAREES'
       $doc.PrinterSettings.PrinterName = $Printer
       if (-not $doc.PrinterSettings.IsValid) { throw "Windows has no printer named '$Printer'." }
 
@@ -175,7 +175,7 @@ public class VyraRawPrinter
           $doc.DefaultPageSettings.PaperSize = $match
         }
         else {
-          $size = New-Object System.Drawing.Printing.PaperSize('VYRA', $w, $h)
+          $size = New-Object System.Drawing.Printing.PaperSize('demo', $w, $h)
           $size.RawKind = 256      # DMPAPER_USER - a custom size
           $doc.DefaultPageSettings.PaperSize = $size
         }
@@ -183,40 +183,40 @@ public class VyraRawPrinter
 
       # The artwork's true size in hundredths of an inch - what it must
       # measure on the label, whatever the driver would rather do.
-      $script:vyraW = 0
-      $script:vyraH = 0
+      $script:demoW = 0
+      $script:demoH = 0
       if ($WidthMm -gt 0 -and $HeightMm -gt 0) {
-        $script:vyraW = [int][Math]::Round($WidthMm * 100.0 / 25.4)
-        $script:vyraH = [int][Math]::Round($HeightMm * 100.0 / 25.4)
+        $script:demoW = [int][Math]::Round($WidthMm * 100.0 / 25.4)
+        $script:demoH = [int][Math]::Round($HeightMm * 100.0 / 25.4)
       }
 
-      $script:vyraIndex = 0        # which page of the run
-      $script:vyraCopy = 0         # copies of it printed so far
-      $script:vyraImg = $null
-      $script:vyraTotal = 0
+      $script:demoIndex = 0        # which page of the run
+      $script:demoCopy = 0         # copies of it printed so far
+      $script:demoImg = $null
+      $script:demoTotal = 0
 
       $doc.add_PrintPage({
           param($sender, $e)
-          $item = $script:vyraPages[$script:vyraIndex]
-          if (-not $script:vyraImg) {
+          $item = $script:demoPages[$script:demoIndex]
+          if (-not $script:demoImg) {
             # Load through a copy so GDI+ does not keep the file locked.
             $bytes = [System.IO.File]::ReadAllBytes($item.Path)
-            $script:vyraImg = [System.Drawing.Image]::FromStream((New-Object System.IO.MemoryStream(, $bytes)))
+            $script:demoImg = [System.Drawing.Image]::FromStream((New-Object System.IO.MemoryStream(, $bytes)))
             switch ($Rotate) {
-              90 { $script:vyraImg.RotateFlip([System.Drawing.RotateFlipType]::Rotate90FlipNone) }
-              180 { $script:vyraImg.RotateFlip([System.Drawing.RotateFlipType]::Rotate180FlipNone) }
-              270 { $script:vyraImg.RotateFlip([System.Drawing.RotateFlipType]::Rotate270FlipNone) }
+              90 { $script:demoImg.RotateFlip([System.Drawing.RotateFlipType]::Rotate90FlipNone) }
+              180 { $script:demoImg.RotateFlip([System.Drawing.RotateFlipType]::Rotate180FlipNone) }
+              270 { $script:demoImg.RotateFlip([System.Drawing.RotateFlipType]::Rotate270FlipNone) }
             }
           }
-          $img = $script:vyraImg
+          $img = $script:demoImg
           $page = $e.PageBounds
 
           # 1:1, not fit-to-page. The artwork is drawn at its true physical
           # size, so a 100 x 30 mm row lands as 100 x 30 mm on the roll and a
           # sticker's content cannot spill into the one beside it.
-          if ($script:vyraW -gt 0 -and $script:vyraH -gt 0) {
-            $dw = $script:vyraW
-            $dh = $script:vyraH
+          if ($script:demoW -gt 0 -and $script:demoH -gt 0) {
+            $dw = $script:demoW
+            $dh = $script:demoH
           }
           else {
             # No size was given: fall back to the page, shape kept.
@@ -235,27 +235,27 @@ public class VyraRawPrinter
           $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
           $e.Graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
           $e.Graphics.DrawImage($img, (New-Object System.Drawing.Rectangle(0, 0, $dw, $dh)))
-          $script:vyraBounds = "page $($page.Width)x$($page.Height), art ${dw}x${dh}, hard margin ${ox}x${oy} (1/100 in)"
+          $script:demoBounds = "page $($page.Width)x$($page.Height), art ${dw}x${dh}, hard margin ${ox}x${oy} (1/100 in)"
 
-          $script:vyraCopy++
-          $script:vyraTotal++
-          if ($script:vyraCopy -ge $item.Copies) {
-            $script:vyraImg.Dispose(); $script:vyraImg = $null
-            $script:vyraIndex++; $script:vyraCopy = 0
+          $script:demoCopy++
+          $script:demoTotal++
+          if ($script:demoCopy -ge $item.Copies) {
+            $script:demoImg.Dispose(); $script:demoImg = $null
+            $script:demoIndex++; $script:demoCopy = 0
           }
-          $e.HasMorePages = ($script:vyraIndex -lt $script:vyraPages.Count)
+          $e.HasMorePages = ($script:demoIndex -lt $script:demoPages.Count)
         })
 
       $doc.Print()
       $paper = $doc.DefaultPageSettings.PaperSize
-      if ($script:vyraImg) { $script:vyraImg.Dispose() }
+      if ($script:demoImg) { $script:demoImg.Dispose() }
       $doc.Dispose()
       Write-Result @{
         ok      = $true
         printer = $Printer
-        copies  = $script:vyraTotal
+        copies  = $script:demoTotal
         paper   = "$($paper.PaperName) $([Math]::Round($paper.Width * 0.254, 1))x$([Math]::Round($paper.Height * 0.254, 1))mm"
-        page    = $script:vyraBounds
+        page    = $script:demoBounds
         rotate  = $Rotate
       }
     }

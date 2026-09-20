@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - QR / Barcode label printing (single & bulk)
+   demo SAREES - QR / Barcode label printing (single & bulk)
    ============================================================ */
 import { state, searchProducts, findByCode, can } from "../store.js";
 import { icon, openSheet, emptyState, ok, err, warn, busy, confirmDialog, toast } from "../ui.js";
@@ -157,7 +157,7 @@ export async function mount(view, { go }) {
  * Chrome remembers them per printer after the first time.
  */
 async function printBoxReminder() {
-  if (sessionStorage.getItem("vyra.printBoxSeen") === "1") return true;
+  if (sessionStorage.getItem("demo.printBoxSeen") === "1") return true;
   const go = await confirmDialog(
     [
       "The print box will open. Set these once - the browser remembers them:",
@@ -170,7 +170,7 @@ async function printBoxReminder() {
       "Without them the stickers come out turned or shrunk."
     ].join("\n"),
     { okText: "Open the print box" });
-  if (go) sessionStorage.setItem("vyra.printBoxSeen", "1");
+  if (go) sessionStorage.setItem("demo.printBoxSeen", "1");
   return go;
 }
 
@@ -209,7 +209,7 @@ function preview(picked, type) {
           }).join("")}</div>`;
         const w = window.open("", "_blank");
         if (!w) return warn("Allow pop-ups to print on A4");
-        w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>VYRA SAREES Labels</title>
+        w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>demo SAREES Labels</title>
           <style>@page{size:A4;margin:8mm}</style></head><body>${html}</body></html>`);
         w.document.close();
         setTimeout(() => { w.focus(); w.print(); }, 500);

@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Customers
+   demo SAREES - Customers
    ============================================================ */
 import { state, on, searchCustomers, can, isAdmin } from "../store.js";
 import { C, listDocs, updateDocById, removeDoc, incr, logActivity, recalcCustomerDues } from "../db.js";
@@ -52,7 +52,7 @@ export async function mount(view, { params, go }) {
       li.onclick = () => customerSheet(state.customers.find((c) => c.id === li.dataset.id), paint, go);
     });
     view.querySelector("#cu-export").onclick = () => {
-      download(`vyra-customers-${Date.now()}.csv`, toCsv(state.customers, [
+      download(`demo-customers-${Date.now()}.csv`, toCsv(state.customers, [
         { label: "Name", key: "name" }, { label: "Mobile", key: "mobile" }, { label: "Email", key: "email" },
         { label: "GSTIN", key: "gstin" }, { label: "Address", key: "address" },
         { label: "Total purchases", key: "totalPurchases" }, { label: "Outstanding", key: "outstanding" }

@@ -1,7 +1,7 @@
 {
-  "name": "VYRA SAREES - Billing & Inventory",
-  "short_name": "VYRA SAREES",
-  "description": "Boutique billing, inventory and sales management for VYRA SAREES",
+  "name": "demo SAREES - Billing & Inventory",
+  "short_name": "demo SAREES",
+  "description": "Boutique billing, inventory and sales management for demo SAREES",
   "start_url": "./index.html#/dashboard",
   "scope": "./",
   "display": "standalone",

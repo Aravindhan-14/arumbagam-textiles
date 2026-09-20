@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Dashboard
+   demo SAREES - Dashboard
    ============================================================ */
 import { state, on, lowStockProducts, outOfStockProducts, totalStockUnits, stockValue, can, canSeeCost } from "../store.js";
 import { queryRange, recent, listDocs, C } from "../db.js";

@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - wired printing
+   demo SAREES - wired printing
    ------------------------------------------------------------
    The shop's printers (a TVS LP 46 Lite for labels, a BP-80 style
    receipt printer for bills) are plugged into the billing PC by
@@ -19,11 +19,11 @@
 
 const API = "/api/print";
 const LS = {
-  mode: "vyra.printMode",
-  receipt: "vyra.printerReceipt",
-  label: "vyra.printerLabel",
-  raw: "vyra.printerRaw",
-  rotate: "vyra.labelRotate"
+  mode: "demo.printMode",
+  receipt: "demo.printerReceipt",
+  label: "demo.printerLabel",
+  raw: "demo.printerRaw",
+  rotate: "demo.labelRotate"
 };
 
 const state = {
@@ -87,14 +87,14 @@ export async function detectPrinters({ force = false } = {}) {
     const r = await fetch(API + "/printers", { signal: ctl.signal, cache: "no-store" });
     clearTimeout(t);
 
-    // Another server is on this address - Live Server, or an older VYRA
+    // Another server is on this address - Live Server, or an older demo
     // SAREES window - and it answers with a page instead of an answer. Say so
     // plainly: printing still works, through the browser's print box.
     const type = r.headers.get("content-type") || "";
     if (!r.ok || !type.includes("json")) {
       state.bridge.ok = false;
       state.bridge.printers = [];
-      state.bridge.error = "This address has no printer helper, so the browser print box is used. For printing with no dialog, open the app from START VYRA SAREES on the shop PC.";
+      state.bridge.error = "This address has no printer helper, so the browser print box is used. For printing with no dialog, open the app from START demo SAREES on the shop PC.";
       announce();
       return state.bridge;
     }
@@ -109,7 +109,7 @@ export async function detectPrinters({ force = false } = {}) {
     state.bridge.ok = false;
     state.bridge.printers = [];
     state.bridge.error = /^https?:\/\/(localhost|127\.|10\.|192\.168\.|172\.)/.test(location.origin)
-      ? "The VYRA SAREES window is not running. Open START VYRA SAREES on the billing PC."
+      ? "The demo SAREES window is not running. Open START demo SAREES on the billing PC."
       : "This page is not served by the shop PC, so wired printing is unavailable.";
   }
   announce();
@@ -155,7 +155,7 @@ function bytesToBase64(bytes) {
  * millimetres, so a sticker comes out at exactly the label size and a
  * bill at the roll's width.
  */
-export async function printCanvas(canvas, { widthMm, heightMm, copies = 1, printer, rotate = 0, title = "VYRA SAREES" } = {}) {
+export async function printCanvas(canvas, { widthMm, heightMm, copies = 1, printer, rotate = 0, title = "demo SAREES" } = {}) {
   const wMm = widthMm || state.width;
   const hMm = heightMm || Math.round((canvas.height / canvas.width) * wMm);
   if (usesBrowserPrint()) return printCanvasViaBrowser(canvas, wMm, hMm, copies, title);
@@ -171,7 +171,7 @@ export async function printCanvas(canvas, { widthMm, heightMm, copies = 1, print
  * Print a run of stickers in one job: pages = [{ canvas, copies }].
  * All of them are the same size, which is what a label roll wants.
  */
-export async function printCanvasRun(pages, { widthMm, heightMm, printer, rotate = 0, title = "VYRA SAREES" } = {}) {
+export async function printCanvasRun(pages, { widthMm, heightMm, printer, rotate = 0, title = "demo SAREES" } = {}) {
   const wMm = widthMm || state.width;
   if (!pages.length) return "wired";
   if (usesBrowserPrint()) {
@@ -229,11 +229,11 @@ function printCanvasViaBrowser(canvas, wMm, hMm, copies, title) {
  * the label paper with no margins and no scaling.
  */
 export async function printPagesInPage(canvases, { widthMm, heightMm } = {}) {
-  document.getElementById("vyra-print-area")?.remove();
-  document.getElementById("vyra-print-style")?.remove();
+  document.getElementById("demo-print-area")?.remove();
+  document.getElementById("demo-print-style")?.remove();
 
   const area = document.createElement("div");
-  area.id = "vyra-print-area";
+  area.id = "demo-print-area";
 
   // Wait for the artwork to be decoded, or the first page prints blank.
   await Promise.all(canvases.map((c) => new Promise((done) => {
@@ -241,15 +241,15 @@ export async function printPagesInPage(canvases, { widthMm, heightMm } = {}) {
     img.onload = img.onerror = () => done();
     img.src = c.toDataURL("image/png");
     const page = document.createElement("div");
-    page.className = "vyra-pg";
+    page.className = "demo-pg";
     page.appendChild(img);
     area.appendChild(page);
   })));
 
   const style = document.createElement("style");
-  style.id = "vyra-print-style";
+  style.id = "demo-print-style";
   style.textContent = `
-    #vyra-print-area{display:none}
+    #demo-print-area{display:none}
     @media print{
       @page{size:${widthMm}mm ${heightMm}mm;margin:0}
 
@@ -262,10 +262,10 @@ export async function printPagesInPage(canvases, { widthMm, heightMm } = {}) {
 
       /* font-size/line-height are zeroed so no stray text line can add a
          fraction of a millimetre and spill onto a page of its own. */
-      #vyra-print-area{display:block!important;margin:0;padding:0;border:0;
+      #demo-print-area{display:block!important;margin:0;padding:0;border:0;
                        font-size:0;line-height:0}
 
-      .vyra-pg{display:block;box-sizing:border-box;
+      .demo-pg{display:block;box-sizing:border-box;
                width:${widthMm}mm;height:${heightMm}mm;
                margin:0;padding:0;border:0;overflow:hidden;
                font-size:0;line-height:0;
@@ -273,11 +273,11 @@ export async function printPagesInPage(canvases, { widthMm, heightMm } = {}) {
 
       /* Break BEFORE each row after the first, never after the last one -
          a trailing break is what produced the empty page. */
-      .vyra-pg + .vyra-pg{break-before:page;page-break-before:always}
+      .demo-pg + .demo-pg{break-before:page;page-break-before:always}
 
       /* 1:1 with the artwork: no smoothing, so the bars and QR modules stay
          hard-edged and scannable. */
-      .vyra-pg img{display:block;width:100%;height:100%;max-width:none;
+      .demo-pg img{display:block;width:100%;height:100%;max-width:none;
                    object-fit:fill;margin:0;padding:0;border:0;
                    image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges;
                    -webkit-print-color-adjust:exact;print-color-adjust:exact}

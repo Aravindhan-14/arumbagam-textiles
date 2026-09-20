@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - UI primitives (toast, sheets, dialogs, icons)
+   demo SAREES - UI primitives (toast, sheets, dialogs, icons)
    ============================================================ */
 import { esc } from "./utils.js";
 

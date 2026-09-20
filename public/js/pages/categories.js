@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Categories
+   demo SAREES - Categories
    ============================================================ */
 import { state, on, can } from "../store.js";
 import { C, createDoc, updateDocById, removeDoc } from "../db.js";

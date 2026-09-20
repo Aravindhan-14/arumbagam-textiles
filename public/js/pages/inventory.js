@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Inventory: stock levels, adjustments, history
+   demo SAREES - Inventory: stock levels, adjustments, history
    ============================================================ */
 import { state, on, searchProducts, can, canSeeCost, costOf, lowStockProducts, outOfStockProducts, totalStockUnits, stockValue } from "../store.js";
 import { C, listDocs, addStock, adjustStock, updateDocById } from "../db.js";
@@ -64,7 +64,7 @@ export async function mount(view, { params, go }) {
     });
     view.querySelector("#iv-quick").onclick = () => pickProduct((p) => stockSheet(p, paint));
     view.querySelector("#iv-export").onclick = () => {
-      download(`vyra-stock-${Date.now()}.csv`, toCsv(searchProducts("", { status: "active" }), [
+      download(`demo-stock-${Date.now()}.csv`, toCsv(searchProducts("", { status: "active" }), [
         { label: "SKU", key: "sku" }, { label: "Product", key: "productName" },
         { label: "Category", key: "categoryName" }, { label: "Stock", key: "stock" },
         { label: "Minimum", key: "minimumStock" },

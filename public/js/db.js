@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Firebase bootstrap + data access layer
+   demo SAREES - Firebase bootstrap + data access layer
    ------------------------------------------------------------
    Every read and write in the app comes through this module.
    There is no shop server any more: the phone talks straight to
@@ -77,7 +77,7 @@ export const incr = (n) => ({ __inc: toNum(n) });
 
 /** Fired after any write so the local cache can refresh itself. */
 function changed(collectionName) {
-  window.dispatchEvent(new CustomEvent("vyra:changed", { detail: { collection: collectionName } }));
+  window.dispatchEvent(new CustomEvent("demo:changed", { detail: { collection: collectionName } }));
 }
 
 /* ============================================================
@@ -126,7 +126,7 @@ const stamps = () => ({
    Settings
    ============================================================ */
 export const DEFAULT_SETTINGS = {
-  businessName: "VYRA SAREES",
+  businessName: "demo SAREES",
   businessType: "Boutique & Textiles",
   address: "",
   mobile: "",
@@ -147,7 +147,7 @@ export const DEFAULT_SETTINGS = {
   maxStaffDiscountPct: 10,
   lowStockDefault: 3,
   printerWidth: 58,              // 58 | 80
-  footerMessage: "Thank You for Shopping with VYRA SAREES\nVisit Again",
+  footerMessage: "Thank You for Shopping with demo SAREES\nVisit Again",
   labelWidthMm: 50,             // one sticker, as measured off the roll
   labelHeightMm: 25,
   labelsPerRow: 2,              // stickers side by side across the roll
@@ -158,7 +158,7 @@ export const DEFAULT_SETTINGS = {
 
 const BUSINESS_DOC = () => ref(C.settings, "business");
 const COUNTER_DOC = () => ref(C.settings, "counters");
-const SETTINGS_CACHE = "vyra.settings";
+const SETTINGS_CACHE = "demo.settings";
 
 export async function loadSettings() {
   try {
@@ -327,7 +327,7 @@ window.addEventListener("online", () => { flushOutbox().catch(() => {}); });
    ============================================================ */
 let worker = null;
 function workerAuth() {
-  if (!worker) worker = AU.getAuth(A.initializeApp(firebaseConfig, "vyra-staff-worker"));
+  if (!worker) worker = AU.getAuth(A.initializeApp(firebaseConfig, "demo-staff-worker"));
   return worker;
 }
 
@@ -486,7 +486,7 @@ export async function recalcCustomerDues() {
    numbering bills while the network is down and two tills never
    mint the same number.
    ============================================================ */
-const BLOCK_KEY = "vyra.numblocks";
+const BLOCK_KEY = "demo.numblocks";
 const BLOCK_SIZE = { invoice: 25, purchase: 5, return: 5, sku: 20 };
 
 function readBlocks() {

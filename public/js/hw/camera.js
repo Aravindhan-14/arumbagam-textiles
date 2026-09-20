@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - camera scanning
+   demo SAREES - camera scanning
    ------------------------------------------------------------
    Two decoders, because neither one is available everywhere:
 

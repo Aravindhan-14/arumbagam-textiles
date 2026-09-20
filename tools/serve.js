@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - tiny static file server
+   demo SAREES - tiny static file server
    ------------------------------------------------------------
    The app is a plain set of files that talk straight to Firebase,
    but a browser will not run ES modules or a service worker off
@@ -97,7 +97,7 @@ function readBody(req) {
   });
 }
 
-const tmpJob = (ext) => path.join(os.tmpdir(), `vyra-${crypto.randomBytes(6).toString("hex")}.${ext}`);
+const tmpJob = (ext) => path.join(os.tmpdir(), `demo-${crypto.randomBytes(6).toString("hex")}.${ext}`);
 
 /**
  * Print artwork through the printer's own Windows driver.
@@ -157,10 +157,10 @@ async function printRaw(job) {
 }
 
 async function handleApi(req, res, pathname) {
-  // Answered without touching Windows, so START VYRA SAREES can tell in an
+  // Answered without touching Windows, so START demo SAREES can tell in an
   // instant whether the window it found is this version or an older one.
   if (pathname === "/api/health" && req.method === "GET") {
-    return sendJson(res, 200, { ok: true, app: "vyra-sarees", printBridge: IS_WINDOWS, port: PORT });
+    return sendJson(res, 200, { ok: true, app: "demo-sarees", printBridge: IS_WINDOWS, port: PORT });
   }
 
   if (pathname === "/api/print/printers" && req.method === "GET") {
@@ -209,7 +209,7 @@ server.listen(PORT, () => {
     .map((n) => n.address);
 
   console.log("");
-  console.log("  VYRA SAREES is running");
+  console.log("  demo SAREES is running");
   console.log("  ---------------------------------------");
   console.log(`  This PC        http://localhost:${PORT}`);
   nets.forEach((ip) => console.log(`  Phone / tablet http://${ip}:${PORT}`));

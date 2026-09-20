@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - Bluetooth 2D scanner (HID / keyboard-wedge)
+   demo SAREES - Bluetooth 2D scanner (HID / keyboard-wedge)
    ------------------------------------------------------------
    A Bluetooth scanner paired in HID mode behaves like a keyboard:
    it "types" the code very fast and finishes with Enter.  We watch

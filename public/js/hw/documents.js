@@ -1,5 +1,5 @@
 /* ============================================================
-   VYRA SAREES - printable documents
+   demo SAREES - printable documents
    ------------------------------------------------------------
    Builds the bill and an HTML twin of it used for on-screen
    preview and browser printing. One layout drives both builders:
@@ -43,7 +43,7 @@ export function buildReceipt(sale, settings, { copy = "", doc } = {}) {
   // so the bill's own flag decides what gets printed.
   const gst = sale.gstEnabled !== false && settings.gstEnabled !== false;
 
-  p.align("center").bold(true).size(2, 2).line(settings.businessName || "VYRA SAREES").size(1, 1);
+  p.align("center").bold(true).size(2, 2).line(settings.businessName || "demo SAREES").size(1, 1);
   if (settings.businessType) p.line(settings.businessType);
   p.bold(false);
   if (settings.address) wrap(settings.address, p.cols).forEach((l) => p.line(l));
@@ -155,7 +155,7 @@ export function receiptHtml(sale, settings, { copy = "" } = {}) {
          <tr><td>SGST</td><td class="r" colspan="2">${num(sale.sgst)}</td></tr>`}` : "";
 
   return `
-  <div class="c b big">${esc(settings.businessName || "VYRA SAREES")}</div>
+  <div class="c b big">${esc(settings.businessName || "demo SAREES")}</div>
   <div class="c">${esc(settings.businessType || "")}</div>
   ${settings.address ? `<div class="c">${esc(settings.address)}</div>` : ""}
   ${settings.mobile ? `<div class="c">Ph: ${esc(settings.mobile)}</div>` : ""}
@@ -201,7 +201,7 @@ export function receiptHtml(sale, settings, { copy = "" } = {}) {
    ============================================================ */
 export async function printReturnSlip(ret, settings) {
   const p = newReceiptDoc(settings);
-  p.align("center").bold(true).size(2, 1).line(settings.businessName || "VYRA SAREES").size(1, 1)
+  p.align("center").bold(true).size(2, 1).line(settings.businessName || "demo SAREES").size(1, 1)
     .line(ret.type === "EXCHANGE" ? "EXCHANGE SLIP" : "RETURN SLIP").bold(false).align("left").rule();
   p.lr("No:", ret.returnNumber || "-");
   p.lr("Date:", fmtDate(new Date()) + " " + fmtTime(new Date()));
