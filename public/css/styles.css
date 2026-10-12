@@ -1,11 +1,11 @@
 /* ============================================================
-   demo SAREES - Boutique Billing & Inventory
+   ARUMBAGAM - Boutique Billing & Inventory
    Mobile-first stylesheet
    ============================================================ */
 :root{
   --maroon:#7B1E3B; --maroon-d:#5E1430; --maroon-l:#9C3556;
   --gold:#C9A227; --gold-l:#E3C356;
-  --bg:#F7F4F2; --surface:#FFFFFF; --surface-2:#FBF8F7;
+  --bg:#F9EFE5; --surface:#FFFFFF; --surface-2:#FBF8F7;
   --line:#E7DFDB; --line-2:#D8CCC6;
   --text:#211A1D; --muted:#7A6C70; --faint:#A2969A;
   --ok:#1E7F53; --ok-bg:#E7F4ED;
@@ -44,25 +44,28 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke
 a{color:var(--maroon);}
 
 /* ---------- Boot ---------- */
-.boot{position:fixed;inset:0;background:linear-gradient(160deg,var(--maroon-d),var(--maroon));
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;z-index:9000;color:#fff;}
-.boot-mark{width:70px;height:70px;border-radius:50%;border:2px solid var(--gold);display:grid;place-items:center;
-  font-weight:700;font-size:26px;letter-spacing:1px;color:var(--gold);}
+.boot{position:fixed;inset:0;background:#F9EFE5;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;z-index:9000;color:#7B1E3B;}
+.boot-mark{width:110px;height:110px;border-radius:50%;overflow:hidden;}
+.boot-mark img{width:100%;height:100%;object-fit:contain;display:block;}
 .boot-name{font-size:22px;font-weight:700;letter-spacing:3px;margin-top:10px;}
 .boot-sub{font-size:12px;letter-spacing:2px;opacity:.8;text-transform:uppercase;}
-.spinner{width:26px;height:26px;border:2.5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;
+.spinner{width:26px;height:26px;border:2.5px solid rgba(123,30,59,.25);border-top-color:#7B1E3B;border-radius:50%;
   animation:spin .8s linear infinite;margin-top:20px;}
-.busy .spinner{margin:0;}
+.busy .spinner{margin:0;border-color:rgba(255,255,255,.3);border-top-color:#fff;}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ---------- Login ---------- */
-.login{position:fixed;inset:0;background:linear-gradient(160deg,var(--maroon-d),var(--maroon) 60%,#3E0D20);
+.login{position:fixed;inset:0;background:#F9EFE5;
   display:flex;align-items:center;justify-content:center;padding:20px;z-index:8000;overflow:auto;}
 .login-card{width:100%;max-width:400px;background:var(--surface);border-radius:var(--r-lg);padding:26px 22px 20px;box-shadow:var(--sh-lg);}
 .brand{text-align:center;margin-bottom:22px;}
 .brand-mark{width:58px;height:58px;margin:0 auto 12px;border-radius:50%;background:var(--maroon);color:var(--gold);
   display:grid;place-items:center;font-weight:700;font-size:20px;letter-spacing:1px;}
 .brand-mark.sm{width:42px;height:42px;font-size:15px;margin:0;}
+.brand-mark.logo{background:none;overflow:hidden;}
+.brand .brand-mark.logo{width:84px;height:84px;}
+.brand-mark.logo img{width:100%;height:100%;object-fit:contain;display:block;}
 .brand h1{margin:0;font-size:20px;letter-spacing:3px;}
 .brand p{margin:2px 0 0;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);}
 .login-foot{text-align:center;font-size:11px;color:var(--faint);margin:14px 0 0;}

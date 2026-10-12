@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - shared page components
+   ARUMBAGAM - shared page components
    (pickers, product / customer / supplier editors)
    ============================================================ */
 import {

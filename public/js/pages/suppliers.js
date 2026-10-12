@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Suppliers
+   ARUMBAGAM - Suppliers
    ============================================================ */
 import { state, on, searchSuppliers, can } from "../store.js";
 import { C, listDocs, updateDocById, incr, logActivity } from "../db.js";

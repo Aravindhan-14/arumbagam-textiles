@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Reports
+   ARUMBAGAM - Reports
    ============================================================ */
 import { state, can, canSeeCost, costOf, lowStockProducts, outOfStockProducts, stockValue, totalStockUnits } from "../store.js";
 import { C, queryRange } from "../db.js";

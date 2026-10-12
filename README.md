@@ -1,4 +1,4 @@
-# demo SAREES — Boutique Billing, Inventory & Sales Management
+# ARUMBAGAM — Boutique Billing, Inventory & Sales Management
 
 A mobile-first web application for the day-to-day running of a saree and boutique shop:
 products, stock, QR/barcode labels, billing on the phone, wired USB printing of bills
@@ -33,7 +33,7 @@ firebase deploy --only firestore:rules,firestore:indexes,storage
 node tools/serve.js                 # http://localhost:5000
 ```
 
-Or double-click **`START demo SAREES.bat`**, which does the last step and opens the
+Or double-click **`START ARUMBAGAM.bat`**, which does the last step and opens the
 browser for you.
 
 Create the owner's login in **Authentication → Users → Add user**, sign in with it, and
@@ -311,7 +311,7 @@ public/
 ## 8. Things worth knowing
 
 * **Nothing in the shop has to be running.** Deploy to Firebase Hosting and the app is
-  a URL; `START demo SAREES.bat` is only for running it off the shop PC.
+  a URL; `START ARUMBAGAM.bat` is only for running it off the shop PC.
 * **The rules are the security.** The Firebase `apiKey` in `firebase-config.js` is not a
   secret — it only names the project. Re-run
   `firebase deploy --only firestore:rules,storage` after any rules change.

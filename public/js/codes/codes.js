@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - QR & barcode generation
+   ARUMBAGAM - QR & barcode generation
    ------------------------------------------------------------
    Uses qrcodejs + JsBarcode (loaded from CDN in index.html) and
    renders onto canvases, which can be shown on screen or saved

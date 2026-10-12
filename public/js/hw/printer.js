@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - wired printing
+   ARUMBAGAM - wired printing
    ------------------------------------------------------------
    The shop's printers (a TVS LP 46 Lite for labels, a BP-80 style
    receipt printer for bills) are plugged into the billing PC by
@@ -94,7 +94,7 @@ export async function detectPrinters({ force = false } = {}) {
     if (!r.ok || !type.includes("json")) {
       state.bridge.ok = false;
       state.bridge.printers = [];
-      state.bridge.error = "This address has no printer helper, so the browser print box is used. For printing with no dialog, open the app from START demo SAREES on the shop PC.";
+      state.bridge.error = "This address has no printer helper, so the browser print box is used. For printing with no dialog, open the app from START ARUMBAGAM on the shop PC.";
       announce();
       return state.bridge;
     }
@@ -109,7 +109,7 @@ export async function detectPrinters({ force = false } = {}) {
     state.bridge.ok = false;
     state.bridge.printers = [];
     state.bridge.error = /^https?:\/\/(localhost|127\.|10\.|192\.168\.|172\.)/.test(location.origin)
-      ? "The demo SAREES window is not running. Open START demo SAREES on the billing PC."
+      ? "The ARUMBAGAM window is not running. Open START ARUMBAGAM on the billing PC."
       : "This page is not served by the shop PC, so wired printing is unavailable.";
   }
   announce();
@@ -155,7 +155,7 @@ function bytesToBase64(bytes) {
  * millimetres, so a sticker comes out at exactly the label size and a
  * bill at the roll's width.
  */
-export async function printCanvas(canvas, { widthMm, heightMm, copies = 1, printer, rotate = 0, title = "demo SAREES" } = {}) {
+export async function printCanvas(canvas, { widthMm, heightMm, copies = 1, printer, rotate = 0, title = "ARUMBAGAM" } = {}) {
   const wMm = widthMm || state.width;
   const hMm = heightMm || Math.round((canvas.height / canvas.width) * wMm);
   if (usesBrowserPrint()) return printCanvasViaBrowser(canvas, wMm, hMm, copies, title);
@@ -171,7 +171,7 @@ export async function printCanvas(canvas, { widthMm, heightMm, copies = 1, print
  * Print a run of stickers in one job: pages = [{ canvas, copies }].
  * All of them are the same size, which is what a label roll wants.
  */
-export async function printCanvasRun(pages, { widthMm, heightMm, printer, rotate = 0, title = "demo SAREES" } = {}) {
+export async function printCanvasRun(pages, { widthMm, heightMm, printer, rotate = 0, title = "ARUMBAGAM" } = {}) {
   const wMm = widthMm || state.width;
   if (!pages.length) return "wired";
   if (usesBrowserPrint()) {

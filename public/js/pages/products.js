@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Products
+   ARUMBAGAM - Products
    ============================================================ */
 import { state, on, searchProducts, can, canSeeCost, costOf, costSupplier, costsStatus, findByCode } from "../store.js";
 import { C, updateDocById, removeDoc, removeCost, logActivity } from "../db.js";

@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Sales history
+   ARUMBAGAM - Sales history
    ============================================================ */
 import { state, can, canSeeCost, costOf } from "../store.js";
 import { C, queryRange, cancelSale, getDocById } from "../db.js";
@@ -214,7 +214,7 @@ export function openBill(sale, onChange, go) {
       api.body.appendChild(extra);
 
       extra.querySelector("#bs-share").onclick = async () => {
-        const text = `${settings.businessName || "demo SAREES"}\n${sale.invoiceNumber}\n${fmtDateTime(sale.createdAt)}\n\n` +
+        const text = `${settings.businessName || "ARUMBAGAM"}\n${sale.invoiceNumber}\n${fmtDateTime(sale.createdAt)}\n\n` +
           (sale.items || []).map((i) => `${i.productName} x${i.qty}  ₹${num(i.netAmount ?? i.amount)}`).join("\n") +
           `\n\nTotal: ₹${num(sale.grandTotal)}\n${settings.footerMessage || ""}`;
         if (navigator.share) { try { await navigator.share({ title: sale.invoiceNumber, text }); } catch {} }

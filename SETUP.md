@@ -1,4 +1,4 @@
-# demo SAREES — Setup
+# ARUMBAGAM — Setup
 
 The shop's data lives in **Firebase** (project `demo-sarees`): Firestore holds
 the products, bills and customers, Firebase Auth holds the logins, and Cloud
@@ -82,7 +82,7 @@ which creates their login and their permissions in one step.
 
 ## 5. Start the app in the shop
 
-Double-click **`START demo SAREES.bat`**. It serves the `public` folder on
+Double-click **`START ARUMBAGAM.bat`**. It serves the `public` folder on
 port 5000 and opens the browser:
 
 ```
@@ -113,7 +113,7 @@ Bluetooth, and the TVS LP 46 Lite has none.
    for a two-up roll of 50 x 25 mm stickers that is **100 x 25 mm** - the
    printer feeds one whole row at a time, not one sticker. Setting it to one
    sticker is what squeezes both labels into one, at half size.
-3. Open the app **on that PC** with `START demo SAREES.bat`.
+3. Open the app **on that PC** with `START ARUMBAGAM.bat`.
 4. Tap the printer icon in the top bar > **Find printers**, then choose
    which printer takes the **bills** and which takes the **labels**. They can
    be the same printer or two different ones.
@@ -196,8 +196,8 @@ from the PC's own `http://localhost:5000` address.
 | Photos do not upload | Cloud Storage is not enabled — see step 2. Everything else still works. |
 | A report says an index is needed | Run the deploy in step 3, or click the link in the browser console. |
 | Printing opens a dialog instead of just printing | The app was opened from the hosted address, or from another device. Open it on the billing PC. |
-| "No wired printer found" | The black window is not running, or the app was opened from a different address than the one it prints. Start it with `START demo SAREES.bat`, then tap **Find printers**. |
-| "The demo SAREES window is an older version" | A black window from before this update is still running. Close it and double-click `START demo SAREES.bat` again - it now replaces an old one by itself. Then reload the page with **Ctrl+Shift+R**. |
+| "No wired printer found" | The black window is not running, or the app was opened from a different address than the one it prints. Start it with `START ARUMBAGAM.bat`, then tap **Find printers**. |
+| "The ARUMBAGAM window is an older version" | A black window from before this update is still running. Close it and double-click `START ARUMBAGAM.bat` again - it now replaces an old one by itself. Then reload the page with **Ctrl+Shift+R**. |
 | Labels come out sideways with `about:blank` printed on them | The print box's paper settings are wrong. Set Paper size to the label stock, Margins to None, Scale to 100, and untick Headers and footers. |
 | Labels print at the wrong size | The driver's paper size must be the **row** (102 x 30 mm for a two-up roll of 50 x 30 stickers), while **Settings > Printing** holds one sticker's size plus how many are across. |
 | Stickers come out sideways | Set **Turn labels on the roll** to 90° in Settings > Printing, and check the driver's preferences are set to portrait. |

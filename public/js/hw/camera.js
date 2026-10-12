@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - camera scanning
+   ARUMBAGAM - camera scanning
    ------------------------------------------------------------
    Two decoders, because neither one is available everywhere:
 

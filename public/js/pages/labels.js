@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - QR / Barcode label printing (single & bulk)
+   ARUMBAGAM - QR / Barcode label printing (single & bulk)
    ============================================================ */
 import { state, searchProducts, findByCode, can } from "../store.js";
 import { icon, openSheet, emptyState, ok, err, warn, busy, confirmDialog, toast } from "../ui.js";
@@ -209,7 +209,7 @@ function preview(picked, type) {
           }).join("")}</div>`;
         const w = window.open("", "_blank");
         if (!w) return warn("Allow pop-ups to print on A4");
-        w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>demo SAREES Labels</title>
+        w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>ARUMBAGAM Labels</title>
           <style>@page{size:A4;margin:8mm}</style></head><body>${html}</body></html>`);
         w.document.close();
         setTimeout(() => { w.focus(); w.print(); }, 500);

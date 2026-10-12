@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Staff & access control
+   ARUMBAGAM - Staff & access control
    ============================================================ */
 import { state, can, isAdmin } from "../store.js";
 import { listUsers, createUser, updateUser, sendStaffPasswordReset } from "../db.js";

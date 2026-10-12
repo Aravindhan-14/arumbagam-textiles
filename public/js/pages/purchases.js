@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Purchases (stock in from suppliers)
+   ARUMBAGAM - Purchases (stock in from suppliers)
    ============================================================ */
 import { state, can, costOf, findByCode, supplierById } from "../store.js";
 import { C, queryRange, recent, createPurchase, nextPurchaseNumber } from "../db.js";

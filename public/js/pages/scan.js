@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Scan screen
+   ARUMBAGAM - Scan screen
    ------------------------------------------------------------
    Primary input is the Bluetooth HID scanner. The camera is a
    full fallback (see js/hw/camera.js) and manual entry is always

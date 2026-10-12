@@ -1,12 +1,12 @@
 ﻿/* ============================================================
-   demo SAREES - service worker
+   ARUMBAGAM - service worker
    ------------------------------------------------------------
    Caches the app shell so the phone opens instantly and keeps
    working through a dropped connection. Firebase traffic is
    never touched here - the Firestore SDK has its own on-device
    cache and replays writes made while offline.
    ============================================================ */
-const VERSION = "demo-v12-search";
+const VERSION = "demo-v14-maroon";
 const SHELL = [
   "./",
   "./index.html",

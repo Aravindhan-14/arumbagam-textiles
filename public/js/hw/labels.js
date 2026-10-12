@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - product stickers
+   ARUMBAGAM - product stickers
    ------------------------------------------------------------
    Everything about the sticker roll lives here, and nothing else
    does. The shop's roll carries two 50 x 25 mm stickers side by
@@ -236,7 +236,7 @@ export async function printLabels(jobs, settings, onProgress) {
     if (onProgress) onProgress(done, total);
   }
 
-  await send(pages, plan, "demo SAREES labels");
+  await send(pages, plan, "ARUMBAGAM labels");
   return total;
 }
 
@@ -248,7 +248,7 @@ export async function printProductLabel(product, settings, type = "qr", copies =
 /** One measuring row, for setting the printer up. */
 export async function printSizeTest(settings) {
   const plan = labelPlan(settings);
-  await send([{ canvas: buildSizeTest(plan), copies: 1 }], plan, "demo SAREES size test");
+  await send([{ canvas: buildSizeTest(plan), copies: 1 }], plan, "ARUMBAGAM size test");
   return plan;
 }
 

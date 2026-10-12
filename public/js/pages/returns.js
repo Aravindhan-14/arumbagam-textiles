@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Returns & Exchange
+   ARUMBAGAM - Returns & Exchange
    ============================================================ */
 import { state, can, productById, findByCode } from "../store.js";
 import { C, listDocs, getDocById, createReturn, nextReturnNumber, queryRange } from "../db.js";

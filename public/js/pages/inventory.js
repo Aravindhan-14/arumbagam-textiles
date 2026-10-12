@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Inventory: stock levels, adjustments, history
+   ARUMBAGAM - Inventory: stock levels, adjustments, history
    ============================================================ */
 import { state, on, searchProducts, can, canSeeCost, costOf, lowStockProducts, outOfStockProducts, totalStockUnits, stockValue } from "../store.js";
 import { C, listDocs, addStock, adjustStock, updateDocById } from "../db.js";

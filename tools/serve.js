@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - tiny static file server
+   ARUMBAGAM - tiny static file server
    ------------------------------------------------------------
    The app is a plain set of files that talk straight to Firebase,
    but a browser will not run ES modules or a service worker off
@@ -157,7 +157,7 @@ async function printRaw(job) {
 }
 
 async function handleApi(req, res, pathname) {
-  // Answered without touching Windows, so START demo SAREES can tell in an
+  // Answered without touching Windows, so START ARUMBAGAM can tell in an
   // instant whether the window it found is this version or an older one.
   if (pathname === "/api/health" && req.method === "GET") {
     return sendJson(res, 200, { ok: true, app: "demo-sarees", printBridge: IS_WINDOWS, port: PORT });
@@ -209,7 +209,7 @@ server.listen(PORT, () => {
     .map((n) => n.address);
 
   console.log("");
-  console.log("  demo SAREES is running");
+  console.log("  ARUMBAGAM is running");
   console.log("  ---------------------------------------");
   console.log(`  This PC        http://localhost:${PORT}`);
   nets.forEach((ip) => console.log(`  Phone / tablet http://${ip}:${PORT}`));

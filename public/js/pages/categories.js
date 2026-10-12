@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Categories
+   ARUMBAGAM - Categories
    ============================================================ */
 import { state, on, can } from "../store.js";
 import { C, createDoc, updateDocById, removeDoc } from "../db.js";

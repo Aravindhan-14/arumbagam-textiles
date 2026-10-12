@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Firebase bootstrap + data access layer
+   ARUMBAGAM - Firebase bootstrap + data access layer
    ------------------------------------------------------------
    Every read and write in the app comes through this module.
    There is no shop server any more: the phone talks straight to
@@ -35,6 +35,12 @@ const [A, AU, FS, ST] = await Promise.all([
 export const app = A.initializeApp(firebaseConfig);
 export const auth = AU.getAuth(app);
 export const storage = ST.getStorage(app);
+
+/* Analytics is optional: it is skipped where the browser does not
+   support it (offline, private mode, blocked) and never stops the app. */
+import(`${SDK}/firebase-analytics.js`)
+  .then(async (AN) => { if (await AN.isSupported()) AN.getAnalytics(app); })
+  .catch(() => {});
 
 /* Multi-tab persistent cache: the shop can have the app open on the
    till and on a phone at the same time and both keep working offline. */
@@ -126,8 +132,8 @@ const stamps = () => ({
    Settings
    ============================================================ */
 export const DEFAULT_SETTINGS = {
-  businessName: "demo SAREES",
-  businessType: "Boutique & Textiles",
+  businessName: "ARUMBAGAM",
+  businessType: "Elegance Made Comfortable",
   address: "",
   mobile: "",
   email: "",
@@ -147,7 +153,7 @@ export const DEFAULT_SETTINGS = {
   maxStaffDiscountPct: 10,
   lowStockDefault: 3,
   printerWidth: 58,              // 58 | 80
-  footerMessage: "Thank You for Shopping with demo SAREES\nVisit Again",
+  footerMessage: "Thank You for Shopping with ARUMBAGAM\nVisit Again",
   labelWidthMm: 50,             // one sticker, as measured off the roll
   labelHeightMm: 25,
   labelsPerRow: 2,              // stickers side by side across the roll

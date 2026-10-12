@@ -1,5 +1,5 @@
 <#
-    demo SAREES - Windows print helper
+    ARUMBAGAM - Windows print helper
     ------------------------------------------------------------
     Called by tools/serve.js so the browser can print straight to
     the USB printer (TVS LP 46 Lite and friends) with no dialog.
@@ -116,7 +116,7 @@ public class demoRawPrinter
 '@
       $n = [Math]::Max(1, $Copies)
       for ($i = 0; $i -lt $n; $i++) {
-        [demoRawPrinter]::SendFile($Printer, $File, 'demo SAREES')
+        [demoRawPrinter]::SendFile($Printer, $File, 'ARUMBAGAM')
       }
       Write-Result @{ ok = $true; printer = $Printer; copies = $n }
     }
@@ -145,7 +145,7 @@ public class demoRawPrinter
       Add-Type -AssemblyName System.Drawing
 
       $doc = New-Object System.Drawing.Printing.PrintDocument
-      $doc.DocumentName = 'demo SAREES'
+      $doc.DocumentName = 'ARUMBAGAM'
       $doc.PrinterSettings.PrinterName = $Printer
       if (-not $doc.PrinterSettings.IsValid) { throw "Windows has no printer named '$Printer'." }
 

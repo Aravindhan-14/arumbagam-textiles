@@ -1,9 +1,9 @@
 @echo off
-title demo SAREES
+title ARUMBAGAM
 setlocal enabledelayedexpansion
 
 REM ============================================================
-REM  demo SAREES - one-click start
+REM  ARUMBAGAM - one-click start
 REM  The shop data lives in Firebase now, so there is no database
 REM  and no server to set up. This only puts the app on an
 REM  http:// address, which the browser needs, and opens it.
@@ -16,7 +16,7 @@ set "PORT=5000"
 set "URL=http://localhost:5000"
 
 echo.
-echo   demo SAREES
+echo   ARUMBAGAM
 echo   -----------------------------------------
 echo.
 
@@ -24,7 +24,7 @@ if not exist "%APPDIR%public\index.html" (
   echo   The "public" folder was not found next to this file.
   echo   Looked in: %APPDIR%
   echo.
-  echo   Keep "START demo SAREES.bat" inside the demo SAREES folder.
+  echo   Keep "START ARUMBAGAM.bat" inside the ARUMBAGAM folder.
   echo   To make a desktop icon, right-click this file ^> Send to ^> Desktop.
   echo.
   pause
@@ -49,7 +49,7 @@ if errorlevel 1 (
   REM on the roll sideways. So replace it.
   call :hasprint %PORT%
   if errorlevel 1 (
-    echo   An older demo SAREES is running. Restarting it ...
+    echo   An older ARUMBAGAM is running. Restarting it ...
     call :stopport %PORT%
     call :start
   ) else (
@@ -61,7 +61,7 @@ echo.
 echo   Opening %URL%
 start "" "%URL%"
 echo.
-echo   Ready. Keep the "demo SAREES" window open while billing.
+echo   Ready. Keep the "ARUMBAGAM" window open while billing.
 echo   Bills and labels print on the USB printer through this window,
 echo   so leave it open - phones on the shop Wi-Fi print through it too.
 echo   The first time on a new phone, connect to the internet once
@@ -72,12 +72,12 @@ exit /b 0
 
 REM ---------- helper: start the server ----------
 :start
-echo   Starting demo SAREES ...
-start "demo SAREES" /d "%APPDIR%" cmd /k node "tools\serve.js" %PORT%
+echo   Starting ARUMBAGAM ...
+start "ARUMBAGAM" /d "%APPDIR%" cmd /k node "tools\serve.js" %PORT%
 call :waitport %PORT% 20
 if errorlevel 1 (
    echo.
-   echo   It did not start. Look at the window titled "demo SAREES"
+   echo   It did not start. Look at the window titled "ARUMBAGAM"
    echo   for the reason.
    echo.
    pause

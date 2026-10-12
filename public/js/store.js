@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - live local cache
+   ARUMBAGAM - live local cache
    ------------------------------------------------------------
    Master data (products, categories, customers, suppliers) is
    mirrored locally. Everything the UI searches runs against this

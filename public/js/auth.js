@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - authentication & session
+   ARUMBAGAM - authentication & session
    ------------------------------------------------------------
    Firebase Auth holds the session, so reopening the app on the
    phone does not ask for the password again. Who a person is

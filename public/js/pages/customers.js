@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Customers
+   ARUMBAGAM - Customers
    ============================================================ */
 import { state, on, searchCustomers, can, isAdmin } from "../store.js";
 import { C, listDocs, updateDocById, removeDoc, incr, logActivity, recalcCustomerDues } from "../db.js";

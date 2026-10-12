@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Activity / audit log
+   ARUMBAGAM - Activity / audit log
    ============================================================ */
 import { can } from "../store.js";
 import { C, listDocs } from "../db.js";

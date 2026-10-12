@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - UI primitives (toast, sheets, dialogs, icons)
+   ARUMBAGAM - UI primitives (toast, sheets, dialogs, icons)
    ============================================================ */
 import { esc } from "./utils.js";
 

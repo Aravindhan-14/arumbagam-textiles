@@ -1,5 +1,5 @@
 /* ============================================================
-   demo SAREES - Billing / POS
+   ARUMBAGAM - Billing / POS
    ============================================================ */
 import { state, findByCode, searchProducts, can, customerById } from "../store.js";
 import { createSale, nextInvoiceNumber, peekBlockSize } from "../db.js";
@@ -560,7 +560,7 @@ export function afterSaleSheet(sale, settings, go) {
 
 function plainReceipt(sale, settings) {
   const lines = [
-    settings.businessName || "demo SAREES",
+    settings.businessName || "ARUMBAGAM",
     settings.address || "", settings.mobile ? "Ph: " + settings.mobile : "", "",
     `Invoice: ${sale.invoiceNumber}`,
     `Date: ${fmtDate(sale.createdAt)} ${fmtTime(sale.createdAt)}`,
